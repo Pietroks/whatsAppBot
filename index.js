@@ -38,7 +38,7 @@ const client = new Client({
     headless: true,
     executablePath: executablePath(),
     args: [
-      '--no-sandbox', 
+      '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-accelerated-2d-canvas',
@@ -46,7 +46,7 @@ const client = new Client({
       '--no-zygote',
       '--single-process',
       '--disable-gpu'
-    ],
+    ]
   }
 });
 let gruposValidos = [];
