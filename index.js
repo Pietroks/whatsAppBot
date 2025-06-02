@@ -21,7 +21,12 @@ const gruposSyncPath = path.join(__dirname, 'gruposIDs', 'grupos_sincronizados.j
 const gruposNaoSyncPath = path.join(__dirname, 'gruposIDs', 'grupos_nao_sincronizados.json');
 const mensagensEnviadasPath = path.join(__dirname, 'historico', 'mensagens_enviadas.json');
 
-const client = new Client();
+const client = new Client({
+  puppeteer: {
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: true,
+  }
+});
 let gruposValidos = [];
 
 client.on('qr', qr => {
