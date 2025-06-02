@@ -9,6 +9,7 @@ const axiosRetry = require('axios-retry').default;
 const chalk = require('chalk');
 const gerarMensagemIA = require('./gerarMensagemIA');
 const http = require('http');
+const { executablePath } = require('puppeteer');
 
 // cria um servidor web simples so para manter uma porta aberta
 const server = http.createServer((req, res) => {
@@ -34,8 +35,18 @@ const mensagensEnviadasPath = path.join(__dirname, 'historico', 'mensagens_envia
 
 const client = new Client({
   puppeteer: {
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
     headless: true,
+    executablePath: executablePath(),
+    args: [
+      '--no-sandbox', 
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu'
+    ],
   }
 });
 let gruposValidos = [];
