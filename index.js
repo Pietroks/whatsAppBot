@@ -8,6 +8,17 @@ require('dotenv').config();
 const axiosRetry = require('axios-retry').default;
 const chalk = require('chalk');
 const gerarMensagemIA = require('./gerarMensagemIA');
+const http = require('http');
+
+// cria um servidor web simples so para manter uma porta aberta
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('bot rodando...');
+});
+
+server.listen(process.env.PORT || 3000, () => {
+  console.log(chalk.yellowBright(`Servidor web iniciado na porta ${process.env.PORT || 3000}`));
+});
 
 axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
 
@@ -68,7 +79,7 @@ client.on('ready', async () => {
   );
   await salvarJSONSeDiferente(gruposNaoSyncPath, naoSincronizados);
 
-  const jobRule = '*/3 * * * *'; // A cada 3 minutos
+  const jobRule = '*/30 * * * *'; // A cada 3 minutos
   const agendamento = schedule.scheduleJob('mensagem-a-cada-3-minutos', jobRule, async () => {
     console.log(chalk.cyan(`📅 Enviando mensagens em: ${new Date().toLocaleString()}`));
     await enviarMensagensEmLote(gruposValidos);
