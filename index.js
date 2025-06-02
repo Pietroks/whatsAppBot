@@ -36,7 +36,6 @@ const mensagensEnviadasPath = path.join(__dirname, 'historico', 'mensagens_envia
 const client = new Client({
   puppeteer: {
     headless: true,
-    executablePath: executablePath(),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',

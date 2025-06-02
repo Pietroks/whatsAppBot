@@ -1,0 +1,19 @@
+# Ignora pastas de dependência
+node_modules/
+.wwebjs_cache/
+
+# Arquivo de ambiente com senhas ou tokens
+old.txt
+
+# Logs
+*.log
+
+# Pastas do VS Code e arquivos do sistema
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Pastas de build
+dist/
+build/
+
