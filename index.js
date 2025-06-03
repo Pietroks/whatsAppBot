@@ -36,6 +36,7 @@ const mensagensEnviadasPath = path.join(__dirname, 'historico', 'mensagens_envia
 const client = new Client({
   puppeteer: {
     headless: true,
+    executablePath: executablePath(),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -60,7 +61,13 @@ client.on('ready', async () => {
   console.log(chalk.green('✅ Bot conectado com sucesso!'));
   console.log(chalk.gray('🔄 Sincronizando grupos do WhatsApp...'));
 
-  const chats = await client.getChats();
+  let chats = [];
+  try {
+    chats = await client.getChats();
+  } catch (err) {
+    console.log(chalk.red('❌ Erro ao obter os chats do WhatsApp:'), err.message);
+    return;
+  }
   const todosGrupos = chats
     .filter(chat => chat.isGroup)
     .map(group => ({ id: group.id._serialized, name: group.name }));
@@ -89,7 +96,7 @@ client.on('ready', async () => {
   );
   await salvarJSONSeDiferente(gruposNaoSyncPath, naoSincronizados);
 
-  const jobRule = '*/30 * * * *'; // A cada 3 minutos
+  const jobRule = '*/3 * * * *'; // A cada 3 minutos
   const agendamento = schedule.scheduleJob('mensagem-a-cada-3-minutos', jobRule, async () => {
     console.log(chalk.cyan(`📅 Enviando mensagens em: ${new Date().toLocaleString()}`));
     await enviarMensagensEmLote(gruposValidos);
@@ -162,12 +169,27 @@ async function salvarMensagemNoHistorico(grupoId, mensagem, nomeGrupo) {
     historico[grupoId].push({
       nomeGrupo,
       mensagem,
-      horario: new Date().toLocaleString()
+      horario: new Date().toISOString()
     });
+
+    limparMensagensAntigas(historico, 7);
 
     await fs.writeFile(mensagensEnviadasPath, JSON.stringify(historico, null, 2), 'utf-8');
   } catch (err) {
     console.error(chalk.red('❌ Erro ao salvar no histórico:', err.message));
+  }
+}
+
+function limparMensagensAntigas(historico, diasMaximos = 7) {
+  const agora = new Date();
+  const msPorDia = 1000 * 60 * 60 * 24;
+
+  for (const grupoId in historico) {
+    historico[grupoId] = historico[grupoId].filter(entry => {
+      const dataMensagem = new Date(entry.horario);
+      const diffDias = (agora - dataMensagem) / msPorDia;
+      return diffDias <= diasMaximos;
+    });
   }
 }
 
