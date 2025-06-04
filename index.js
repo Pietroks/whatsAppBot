@@ -96,7 +96,7 @@ client.on('ready', async () => {
   );
   await salvarJSONSeDiferente(gruposNaoSyncPath, naoSincronizados);
 
-  const jobRule = '*/3 * * * *'; // A cada 3 minutos
+  const jobRule = '*/30 * * * *'; // A cada 3 minutos
   const agendamento = schedule.scheduleJob('mensagem-a-cada-3-minutos', jobRule, async () => {
     console.log(chalk.cyan(`📅 Enviando mensagens em: ${new Date().toLocaleString()}`));
     await enviarMensagensEmLote(gruposValidos);
