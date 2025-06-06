@@ -1,0 +1,98 @@
+body {
+  background-color: #f8f9fa;
+  color: #333;
+  font-family: 'Segoe UI', Roboto, sans-serif;
+}
+
+h1 {
+  font-weight: bold;
+  color: #007bff;
+}
+
+#logs {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  height: 200px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+#logs div {
+  margin-bottom: 2px;
+}
+
+#logs div::before {
+  content: '';
+}
+
+#logs span.timestamp {
+  color: #888;
+  margin-right: 6px;
+}
+
+table {
+  background-color: #fff;
+}
+
+th {
+  background-color: #343a40 !important;
+  color: white !important;
+}
+
+td, th {
+  vertical-align: middle;
+}
+
+table tr:hover {
+  background-color: #f1f1f1;
+}
+
+#qrcode img {
+  max-width: 100%;
+  height: auto;
+}
+
+button {
+  border-radius: 8px !important;
+}
+
+canvas {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+input#intervalo {
+  width: 80px;
+}
+
+.input-group span {
+  background-color: #343a40;
+  color: white;
+  border-radius: 8px 0 0 8px;
+}
+
+.input-group input {
+  min-width: 100px;
+}
+
+
+@media (max-width: 768px) {
+  .divAgendamento {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .input-group {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  input#intervalo {
+    width: 100%;
+  }
+}

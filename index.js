@@ -1,5 +1,5 @@
 const { Client } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+const qrcode = require('qrcode');
 const schedule = require('node-schedule');
 const axios = require('axios');
 const fs = require('fs').promises;
@@ -8,133 +8,236 @@ require('dotenv').config();
 const axiosRetry = require('axios-retry').default;
 const chalk = require('chalk');
 const gerarMensagemIA = require('./gerarMensagemIA');
-const http = require('http');
 const { executablePath } = require('puppeteer');
 
-// cria um servidor web simples so para manter uma porta aberta
-const server = http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end('bot rodando...');
-});
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const bodyParser = require('body-parser');
+const { error } = require('console');
+const { config } = require('dotenv');
 
-server.listen(process.env.PORT || 3000, () => {
-  console.log(chalk.yellowBright(`Servidor web iniciado na porta ${process.env.PORT || 3000}`));
-});
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+const PORT = process.env.PORT || 3001;
+
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'views')));
 
 axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-if (!OPENAI_API_KEY) {
-  console.error('❌ OPENAI_API_KEY não encontrada no .env. Abortando...');
-  process.exit(1);
-}
 
 const gruposSyncPath = path.join(__dirname, 'gruposIDs', 'grupos_sincronizados.json');
 const gruposNaoSyncPath = path.join(__dirname, 'gruposIDs', 'grupos_nao_sincronizados.json');
 const mensagensEnviadasPath = path.join(__dirname, 'historico', 'mensagens_enviadas.json');
+const configPath = path.join(__dirname, 'config.json');
 
-const client = new Client({
-  puppeteer: {
-    headless: true,
-    executablePath: executablePath(),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-gpu'
-    ]
-  }
-});
+let client;
 let gruposValidos = [];
+let agendamento;
+let clientEmDesconexao = false;
 
-client.on('qr', qr => {
-  console.clear();
-  console.log(chalk.green('📲 Escaneie este QR Code com o WhatsApp Web:'));
-  qrcode.generate(qr, { small: true });
-});
+function clientAtivo() {
+  return client && client.info && client.info.wid;
+}
 
-client.on('ready', async () => {
-  console.log(chalk.green('✅ Bot conectado com sucesso!'));
-  console.log(chalk.gray('🔄 Sincronizando grupos do WhatsApp...'));
+function removerDuplicados(grupos) {
+  const mapa = new Map();
+  grupos.forEach(g => mapa.set(g.id, g));
+  return Array.from(mapa.values());
+}
 
-  let chats = [];
+async function restartClient() {
   try {
-    chats = await client.getChats();
+    if (client) {
+      await client.destroy();
+      logDashboard('🗑️ Cliente WhatsApp destruído.');
+    }
   } catch (err) {
-    console.log(chalk.red('❌ Erro ao obter os chats do WhatsApp:'), err.message);
+    console.error('Erro ao destruir o client:', err.message);
+  }
+
+  client = new Client({
+    puppeteer: {
+      headless: true,
+      executablePath: executablePath(),
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
+      ]
+    }
+  });
+
+  configurarEventosClient();
+  client.initialize();
+}
+
+function configurarEventosClient() {
+  client.on('qr', async qr => {
+    try {
+      const qrImage = await qrcode.toDataURL(qr);
+      logDashboard('📲 QR Code gerado! Escaneie para conectar...');
+      io.emit('qr', qrImage);
+    } catch (err) {
+      logDashboard('❌ Erro ao gerar QR Code: ' + err.message);
+    }
+  });
+
+  client.on('ready', async () => {
+    logDashboard('✅ Bot conectado com sucesso!');
+    io.emit('status', 'conectado');
+    logDashboard('🔄 Sincronizando grupos...');
+    await sincronizarGrupos();
+    const config = await carregarConfig();
+    if (config.habilitado) iniciarAgendamento();
+  });
+
+  client.on('disconnected', reason => {
+    logDashboard(`🔌 Desconectado: ${reason}`);
+    io.emit('status', 'desconectado');
+  });
+
+  client.on('auth_failure', msg => {
+    logDashboard(`❌ Falha de autenticação: ${msg}`);
+    io.emit('status', 'desconectado');
+  });
+}
+
+function logDashboard(msg) {
+  console.log(msg);
+  io.emit('log', msg);
+}
+
+async function sincronizarGrupos() {
+  if (clientEmDesconexao || !clientAtivo()) {
+    logDashboard('⚠️ WhatsApp não está conectado. Cancelando sincronização.');
     return;
   }
-  const todosGrupos = chats
-    .filter(chat => chat.isGroup)
-    .map(group => ({ id: group.id._serialized, name: group.name }));
 
-  console.log(chalk.green(`🔍 ${todosGrupos.length} grupos encontrados.`));
+  const chats = await client.getChats();
+  const todosGrupos = chats.filter(c => c.isGroup).map(g => ({ id: g.id._serialized, name: g.name }));
+  logDashboard(`🔍 ${todosGrupos.length} grupos encontrados.`);
 
   let gruposSalvos = [];
   try {
-    const dados = await fs.readFile(gruposSyncPath, 'utf-8');
-    gruposSalvos = JSON.parse(dados);
-    if (!Array.isArray(gruposSalvos)) throw new Error('Não é um array');
+    gruposSalvos = JSON.parse(await fs.readFile(gruposSyncPath, 'utf-8'));
   } catch {
-    console.warn(chalk.yellow('⚠️ Usando lista vazia para grupos sincronizados.'));
+    logDashboard('⚠️ Nenhum grupo sincronizado previamente.');
   }
 
-  gruposValidos = gruposSalvos.filter(g => todosGrupos.some(t => t.id === g.id));
-  console.log(chalk.green(`✅ ${gruposValidos.length} grupos sincronizados:`));
-  gruposValidos.forEach(g => {
-    console.log(chalk.bgBlue(`• ${g.curso || g.name} (${g.id})`));
-  });
+  const gruposNoWhatsApp = todosGrupos.map(g => g.id);
+  const gruposNaoEncontrados = gruposSalvos.filter(g => !gruposNoWhatsApp.includes(g.id));
 
+  if (gruposNaoEncontrados.length) {
+    logDashboard(`⚠️ Atenção! ${gruposNaoEncontrados.length} grupos sincronizados não foram encontrados no WhatsApp.`);
+    gruposNaoEncontrados.forEach(g => logDashboard(`• ${g.name} (${g.id})`));
+  }
+
+  gruposValidos = removerDuplicados(gruposSalvos.filter(g => gruposNoWhatsApp.includes(g.id)));
   await salvarJSONSeDiferente(gruposSyncPath, gruposValidos);
 
-  const naoSincronizados = todosGrupos.filter(
-    g => !gruposValidos.some(v => v.id === g.id)
-  );
+  const naoSincronizados = todosGrupos.filter(g => !gruposValidos.some(v => v.id === g.id));
   await salvarJSONSeDiferente(gruposNaoSyncPath, naoSincronizados);
 
-  const jobRule = '*/30 * * * *'; // A cada 3 minutos
-  const agendamento = schedule.scheduleJob('mensagem-a-cada-3-minutos', jobRule, async () => {
-    console.log(chalk.cyan(`📅 Enviando mensagens em: ${new Date().toLocaleString()}`));
-    await enviarMensagensEmLote(gruposValidos);
+  logDashboard(`✅ ${gruposValidos.length} grupos sincronizados:`);
+  gruposValidos.forEach(g => logDashboard(`• ${g.name} (${g.id})`));
+}
 
-    const proxima = agendamento.nextInvocation();
-    console.log(chalk.blue(`⏳ Próximo envio: ${proxima.toLocaleString()}`));
+async function iniciarAgendamento() {
+  const config = await carregarConfig();
+  const regra = `*/${config.intervaloMinutos} * * * *`;
+
+  if (!config.habilitado) {
+    logDashboard('⏸️ Envio de mensagens desativado.');
+    return;
+  }
+
+  if (agendamento) {
+    agendamento.cancel();
+    logDashboard('🔁 Reiniciando agendamento...');
+  }
+
+  agendamento = schedule.scheduleJob('envio-mensagens', regra, async () => {
+    logDashboard(`📅 Enviando mensagens em: ${new Date().toLocaleString()}`);
+    await enviarMensagensEmLote(gruposValidos);
+    logDashboard(`⏳ Próximo envio: ${agendamento.nextInvocation().toLocaleString()}`);
   });
 
-  console.log(chalk.blackBright(`🕒 Aguardando até ${agendamento.nextInvocation().toLocaleString()} para envio das mensagens...`));
+  logDashboard(`🕒 Intervalo definido: ${config.intervaloMinutos} minutos.`);
+}
 
-  setInterval(() => {
-    const diff = agendamento.nextInvocation() - new Date();
-    if (diff > 0) {
-      const h = Math.floor(diff / 1000 / 60 / 60);
-      const m = Math.floor((diff / 1000 / 60) % 60);
-      const s = Math.floor((diff / 1000) % 60);
-      process.stdout.write(`⌛ Tempo restante: ${h}h ${m}m ${s}s   \r`);
-    }
-  }, 1000);
-});
-
-client.on('message', msg => {
-  if (msg.from.endsWith('@g.us')) {
-    console.log(chalk.gray(`📥 Mensagem recebida do grupo: ${msg.from}`));
+async function pararAgendamento() {
+  if (agendamento) {
+    agendamento.cancel();
+    logDashboard('⏹️ Agendamento parado.');
   }
-});
+}
 
-client.on('disconnected', reason => {
-  console.warn(chalk.yellow(`🔌 Desconectado: ${reason}`));
-});
+async function enviarMensagensEmLote(grupos) {
+  try {
+    const gruposSalvos = JSON.parse(await fs.readFile(gruposSyncPath, 'utf-8'));
+    gruposValidos = removerDuplicados(gruposSalvos);
+  } catch {
+    logDashboard('⚠️ Erro ao carregar grupos sincronizados antes do envio.');
+    return
+  }
 
-client.on('auth_failure', msg => {
-  console.error(chalk.red('❌ Falha de autenticação:', msg));
-});
+  if (clientEmDesconexao || !clientAtivo()) {
+    logDashboard('⚠️ WhatsApp não está conectado. Cancelando envio.');
+    return;
+  }
 
-client.initialize();
+  const config = await carregarConfig();
+  const INTERVALO = config.delayEnvioMs || 15000
+  for (let i = 0; i < grupos.length; i++) {
+    const grupo = grupos[i];
+    const nomeGrupo = grupo.name;
 
-// ==== Funções Auxiliares ====
+    if (i > 0) await delay(INTERVALO);
+    const enviado = await enviarMensagemParaGrupo(grupo);
+    if (!enviado) logDashboard(`⏩ Nenhuma nova mensagem para "${nomeGrupo}".`);
+  }
+}
+
+async function enviarMensagemParaGrupo(grupo) {
+  try {
+    const nomeGrupo = grupo.name;
+    let mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
+
+    let historico = {};
+    try {
+      historico = JSON.parse(await fs.readFile(mensagensEnviadasPath, 'utf-8'));
+    } catch {}
+
+    const ultimas = (historico[grupo.id]?.map(m => m.mensagem.trim()) || []).slice(-10);
+    let tentativas = 0;
+
+    while (ultimas.includes(mensagem.trim()) && tentativas < 3) {
+      mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
+      tentativas++;
+    }
+
+    if (!ultimas.includes(mensagem.trim())) {
+      await client.sendMessage(grupo.id, mensagem);
+      await salvarMensagemNoHistorico(grupo.id, mensagem, nomeGrupo);
+      logDashboard(`📤 Mensagem enviada para "${nomeGrupo}"`);
+      return true;
+    }
+
+    return false;
+  } catch (err) {
+    logDashboard(`❌ Erro ao enviar para "${grupo.name}": ${err.message}`);
+    return false;
+  }
+}
 
 async function salvarJSONSeDiferente(caminho, conteudo) {
   const jsonNovo = JSON.stringify(conteudo, null, 2);
@@ -143,14 +246,10 @@ async function salvarJSONSeDiferente(caminho, conteudo) {
     if (jsonAntigo !== jsonNovo) {
       await fs.mkdir(path.dirname(caminho), { recursive: true });
       await fs.writeFile(caminho, jsonNovo, 'utf-8');
-      console.log(`💾 Arquivo atualizado: ${caminho}`);
-    } else {
-      console.log(chalk.gray(`📁 Nenhuma mudança em: ${caminho}`));
     }
   } catch {
     await fs.mkdir(path.dirname(caminho), { recursive: true });
     await fs.writeFile(caminho, jsonNovo, 'utf-8');
-    console.log(`📁 Arquivo criado: ${caminho}`);
   }
 }
 
@@ -158,11 +257,8 @@ async function salvarMensagemNoHistorico(grupoId, mensagem, nomeGrupo) {
   try {
     let historico = {};
     try {
-      const dados = await fs.readFile(mensagensEnviadasPath, 'utf-8');
-      historico = JSON.parse(dados);
-    } catch {
-      await fs.mkdir(path.dirname(mensagensEnviadasPath), { recursive: true });
-    }
+      historico = JSON.parse(await fs.readFile(mensagensEnviadasPath, 'utf-8'));
+    } catch {}
 
     if (!historico[grupoId]) historico[grupoId] = [];
 
@@ -172,24 +268,13 @@ async function salvarMensagemNoHistorico(grupoId, mensagem, nomeGrupo) {
       horario: new Date().toISOString()
     });
 
-    limparMensagensAntigas(historico, 7);
+    // limitar para as ultimas 50 mensagens
+    historico[grupoId] = historico[grupoId].slice(-50);
 
+    await fs.mkdir(path.dirname(mensagensEnviadasPath), { recursive: true });
     await fs.writeFile(mensagensEnviadasPath, JSON.stringify(historico, null, 2), 'utf-8');
   } catch (err) {
-    console.error(chalk.red('❌ Erro ao salvar no histórico:', err.message));
-  }
-}
-
-function limparMensagensAntigas(historico, diasMaximos = 7) {
-  const agora = new Date();
-  const msPorDia = 1000 * 60 * 60 * 24;
-
-  for (const grupoId in historico) {
-    historico[grupoId] = historico[grupoId].filter(entry => {
-      const dataMensagem = new Date(entry.horario);
-      const diffDias = (agora - dataMensagem) / msPorDia;
-      return diffDias <= diasMaximos;
-    });
+    logDashboard('Erro ao salvar no histórico: ' + err.message);
   }
 }
 
@@ -197,60 +282,193 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function enviarMensagensEmLote(grupos) {
-  const INTERVALO = 15000; // 15 segundos
-  for (let i = 0; i < grupos.length; i++) {
-    const grupo = grupos[i];
-    const nomeGrupo = grupo.curso || grupo.name;
-
-    if (i > 0) {
-      console.log(chalk.gray(`⏳ Aguardando 15s antes de enviar para "${nomeGrupo}"...`));
-      await delay(INTERVALO);
-    } else {
-      console.log(chalk.gray(`⏩ Enviando imediatamente para "${nomeGrupo}".`));
-    }
-
-    const enviado = await enviarMensagemParaGrupo(grupo);
-
-    if (!enviado) {
-      console.log(chalk.gray(`⏩ Nenhuma nova mensagem enviada para "${nomeGrupo}".`));
-    }
-  }
-}
-
-async function enviarMensagemParaGrupo(grupo) {
+async function carregarConfig() {
   try {
-    const nomeGrupo = grupo.curso || grupo.name || 'Grupo desconhecido';
-    let mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
+    const data = await fs.readFile(configPath, 'utf-8');
+    const config = JSON.parse(data);
 
-    let historico = {};
-    try {
-      const data = await fs.readFile(mensagensEnviadasPath, 'utf-8');
-      historico = JSON.parse(data);
-    } catch {}
-
-    const ultimasMensagens = historico[grupo.id]?.map(m => m.mensagem.trim()) || [];
-    const ultimas = ultimasMensagens.slice(-10);
-
-    let tentativas = 0;
-    const MAX = 3;
-
-    while (ultimas.includes(mensagem.trim()) && tentativas < MAX) {
-      console.log(chalk.yellow(`🔁 Mensagem repetida para "${nomeGrupo}". Gerando nova...`));
-      mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
-      tentativas++;
+    // Garantir valores padrões se não existirem
+    if (typeof config.intervaloMinutos !== 'number' || config.intervaloMinutos < 1) {
+      config.intervaloMinutos = 30;
+    }
+    if (typeof config.delayEnvioMs !== 'number' || config.delayEnvioMs < 1000) {
+      config.delayEnvioMs = 15000;
+    }
+    if (typeof config.habilitado !== 'boolean') {
+      config.habilitado = true;
     }
 
-    if (!ultimas.includes(mensagem.trim())) {
-      await client.sendMessage(grupo.id, mensagem);
-      await salvarMensagemNoHistorico(grupo.id, mensagem, nomeGrupo);
-      console.log(chalk.green(`📤 Mensagem enviada para "${nomeGrupo}"`));
-      return true;
-    }
-
-    return false;
-  } catch (err) {
-    console.error(chalk.red(`❌ Erro ao enviar mensagem para "${grupo.name}": ${err.message}`));
-    return false;
+    return config;
+  } catch {
+    return { intervaloMinutos: 30, habilitado: true, delayEnvioMs: 15000 };
   }
 }
+
+async function salvarConfig(config) {
+  await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+// 📡 API do Dashboard
+app.get('/api/mensagens', async (req, res) => {
+  try {
+    const data = await fs.readFile(mensagensEnviadasPath, 'utf-8');
+    res.json(JSON.parse(data));
+  } catch {
+    res.json({});
+  }
+});
+
+app.post('/api/iniciar', async (req, res) => {
+  const config = await carregarConfig();
+  config.habilitado = true;
+  await salvarConfig(config);
+  await iniciarAgendamento();
+  logDashboard('▶️ Agendamento iniciado via dashboard.');
+  res.json({ ok: true });
+});
+
+app.post('/api/parar', async (req, res) => {
+  const config = await carregarConfig();
+  config.habilitado = false;
+  await salvarConfig(config);
+  await pararAgendamento();
+  logDashboard('⏹️ Agendamento parado via dashboard.');
+  res.json({ ok: true });
+});
+
+
+app.post('/api/config', async (req, res) => {
+  const config = await carregarConfig();
+
+  const novoIntervalo = parseInt(req.body.intervaloMinutos);
+  if (isNaN(novoIntervalo) || novoIntervalo < 1) {
+    return res.status(400).json({ error: 'Intervalo inválido. Deve ser >= 1 minuto.' });
+  }
+  config.intervaloMinutos = novoIntervalo;
+
+  if (req.body.delayEnvioMs !== undefined) {
+    const novoDelay = parseInt(req.body.delayEnvioMs);
+    if (isNaN(novoDelay) || novoDelay < 1000) {
+      return res.status(400).json({ error: 'Delay inválido. Deve ser >= 1000 ms.' });
+    }
+    config.delayEnvioMs = novoDelay;
+  }
+
+  await salvarConfig(config);
+
+  if (config.habilitado) {
+    await pararAgendamento();
+    await iniciarAgendamento();
+  }
+
+  logDashboard(`💾 Configuração atualizada: intervalo ${config.intervaloMinutos} minutos, delay ${config.delayEnvioMs} ms.`);
+  res.json({ ok: true, config });
+});
+
+app.post('/api/desconectar', async (req, res) => {
+  if (!clientAtivo()) {
+    logDashboard('⚠️ Cliente não está pronto para desconectar.');
+    return res.status(400).json({ error: 'cliente nao esta pronto.' });
+  }
+
+  try {
+    logDashboard('🔌 Bot desconectado via dashboard.');
+    clientEmDesconexao = true;
+
+    await pararAgendamento();
+    
+    await client.logout();
+
+    await delay(1000);
+
+    await client.destroy();
+
+    await restartClient();
+    logDashboard('✅ WhatsApp desconectado com sucesso!');
+    clientEmDesconexao = false;
+
+    res.json({ ok: true });
+  } catch (err) {
+    clientEmDesconexao = false;
+    logDashboard('❌ Erro ao desconectar: ' + err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/status', (req, res) => {
+  const status = clientAtivo() ? 'conectado' : 'desconectado';
+  res.json({ status });
+});
+
+app.get('/api/grupos-nao-sincronizados', async (req, res) => {
+  try {
+    const data = await fs.readFile(gruposNaoSyncPath, 'utf-8');
+    res.json(JSON.parse(data));
+  } catch {
+    res.json([]);
+  }
+});
+
+app.post('/api/sincronizar-grupo', async (req, res) => {
+  const { id, name } = req.body;
+  if (!id || !name) return res.status(400).json({error: 'ID e nome do grupo sao obrigatorios'});
+  
+  try {
+    const gruposSyncRaw = await fs.readFile(gruposSyncPath, 'utf-8').catch(() => '[]');
+    const gruposNaoSyncRaw = await fs.readFile(gruposNaoSyncPath, 'utf-8').catch(() => '[]');
+
+    const gruposSync = JSON.parse(gruposSyncRaw);
+    const gruposNaoSync = JSON.parse(gruposNaoSyncRaw);
+
+    // adiciona ao sincronizado se nao tive
+    if (!gruposSync.find(g => g.id === id)) {
+      gruposSync.push({ id, name })
+    }
+
+    // remove do nao sincronizado
+    const novosNaoSync = gruposNaoSync.filter(g => g.id !== id);
+
+    await salvarJSONSeDiferente(gruposSyncPath, gruposSync);
+    await salvarJSONSeDiferente(gruposNaoSyncPath, novosNaoSync);
+
+    gruposValidos = removerDuplicados([...gruposSync]);
+
+    logDashboard(`✅ Grupo "${name}" sincronizado manualmente via dashboard.`);
+    await sincronizarGrupos();
+
+    const config = await carregarConfig();
+    if (config.habilitado) {
+      await pararAgendamento();
+      await iniciarAgendamento();
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: err.message});
+  }
+});
+
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', client: clientAtivo() ? 'conectado' : 'desconectado'});
+});
+
+
+app.get('/api/config', async (req, res) => {
+  const config = await carregarConfig();
+  res.json(config);
+});
+
+
+// 🌐 Serve a interface
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'index.html'));
+});
+
+// 🚀 Start servidor
+server.listen(PORT, () => {
+  logDashboard(`🔧 Dashboard e API disponíveis em: http://localhost:${PORT}`);
+});
+
+restartClient();

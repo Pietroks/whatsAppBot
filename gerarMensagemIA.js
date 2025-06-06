@@ -47,7 +47,19 @@ async function gerarMensagemIA(nomeGrupoOuCurso, grupoId) {
     return respostaIA.trim();
   } catch (err) {
     console.error(chalk.red(`❌ Erro ao gerar mensagem para grupo ${grupoId}:`, err.message));
-    return `Olá! Hoje é um bom momento para revisar os conteúdos do curso "${nomeGrupoOuCurso}". Em breve enviaremos novidades!`;
+    
+    const mensagensGenericas = [
+      `Pessoal, passando para lembrar de dar uma olhada no material do curso "${nomeGrupoOuCurso}". Bons estudos!`,
+      `E aí, turma! Tudo certo com os estudos em "${nomeGrupoOuCurso}"? Qualquer dúvida, mandem aqui!`,
+      `Uma ótima semana de estudos para todos do curso "${nomeGrupoOuCurso}"! Vamos com tudo! ✨`,
+      `Só para dar um alô e desejar foco total nos estudos do curso "${nomeGrupoOuCurso}"!`,
+      `Lembrete amigável: que tal separar um tempinho hoje para o nosso curso "${nomeGrupoOuCurso}"? 😉`,
+      `Olá! Hoje é um bom momento para revisar os conteúdos do curso "${nomeGrupoOuCurso}". Em breve enviaremos novidades!`
+    ];
+
+    const indiceAleatorio = Math.floor(Math.random() * mensagensGenericas.length);
+
+    return mensagensGenericas[indiceAleatorio];
   }
 }
 
