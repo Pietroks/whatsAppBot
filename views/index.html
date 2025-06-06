@@ -19,7 +19,6 @@
       </li>
     </ul>
 
-    <!-- 🔑 Modal QR Code -->
     <div class="modal fade" id="modalQr" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -58,14 +57,19 @@
       <button id="botao-acao" class="btn btn-outline-primary" onclick="acaoBot()">🔄 Verificando...</button>
     </div>
 
-    
-    
     <div class="tab-content">
-      <!-- 🟩 Aba Dashboard -->
       <div class="tab-pane fade show active" id="dashboard">
+
         <div class="mb-4">
           <h4>🖥️ Logs do Bot</h4>
           <div id="logs" class="border rounded p-3 bg-white" style="height: 200px; overflow-y: auto;"></div>
+        </div>
+
+        <div class="mb-4">
+          <h4>🩺 Status do Sistema</h4>
+          <div id="health-status" class="list-group">
+            <div class="list-group-item">Verificando status...</div>
+          </div>
         </div>
 
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -87,7 +91,6 @@
         </table>
       </div>
 
-      <!-- 🟦 Aba Gerenciar Grupos -->
       <div class="tab-pane fade" id="grupos">
         <h4 class="mb-3">🔗 Gerenciar Grupos Não Sincronizados</h4>
         <button class="btn btn-primary mb-2" onclick="carregarGruposNaoSync()">🔄 Atualizar Lista</button>
@@ -103,11 +106,8 @@
         </table>
       </div>
 
-    </div> <!-- fecha .tab-content -->
+    </div> </div>
 
-  </div>
-
-  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script>
@@ -137,6 +137,46 @@
         botaoAcao.onclick = () => alert('Servidor não disponível');
       }
     }
+
+    // --- NOVA FUNÇÃO PARA VERIFICAR A SAÚDE DO SISTEMA ---
+    async function verificarSaude() {
+        const healthStatusDiv = document.getElementById('health-status');
+        try {
+            const res = await fetch(`${API_BOT}/api/health`);
+            const healthData = await res.json();
+            
+            healthStatusDiv.innerHTML = ''; // Limpa o status anterior
+
+            for (const checkName in healthData.checks) {
+                const check = healthData.checks[checkName];
+                const statusClass = check.status === 'ok' ? 'bg-success' : 'bg-danger';
+                const statusText = check.status === 'ok' ? 'OK' : 'ERRO';
+
+                const itemHtml = `
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>${checkName.replace(/_/g, ' ').toUpperCase()}</span>
+                        <span>
+                            <span class="badge ${statusClass} me-2">${statusText}</span>
+                            ${check.message}
+                        </span>
+                    </div>
+                `;
+                healthStatusDiv.insertAdjacentHTML('beforeend', itemHtml);
+            }
+
+        } catch (error) {
+            healthStatusDiv.innerHTML = `
+              <div class="list-group-item list-group-item-danger d-flex justify-content-between align-items-center">
+                  <span>STATUS GERAL</span>
+                  <span>
+                      <span class="badge bg-danger me-2">FALHA</span>
+                      Não foi possível conectar ao servidor do bot.
+                  </span>
+              </div>
+            `;
+        }
+    }
+
 
     async function carregarConfig() {
       const res = await fetch('/api/config');
@@ -171,12 +211,10 @@
       if (res.ok) {
         alert(`💾 Configurações atualizadas! Intervalo: ${minutos} min | Delay: ${delay} ms`);
       } else {
-        const erro =  await res.json;
+        const erro =  await res.json();
         alert(`❌ Erro ao atualizar: ${erro.error}`);
       }
     }
-
-    carregarConfig();
 
     function abrirQrCode() {
       modalQr.show();
@@ -276,18 +314,7 @@
       await fetch(`${API_BOT}/api/parar`, { method: 'POST' });
       alert('⏹️ Bot parado');
     }
-
-    async function atualizarIntervalo() {
-      const minutos = document.getElementById('intervalo').value;
-      if (!minutos) return alert('⚠️ Informe o intervalo em minutos');
-      await fetch(`${API_BOT}/api/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intervaloMinutos: parseInt(minutos) })
-      });
-      alert(`💾 Intervalo atualizado para ${minutos} minutos`);
-    }
-
+    
     // sincronizar e exibir grupos
     async function carregarGruposNaoSync() {
       const res = await fetch('/api/grupos-nao-sincronizados');
@@ -342,17 +369,19 @@
       const someTabTriggerEl = document.querySelector(`#tabs a[href="${activeTab}"]`);
       if (someTabTriggerEl) {
         const tab = new bootstrap.Tab(someTabTriggerEl);
-
         tab.show();
       }
     }
 
     // 🏁 Inicialização
+    carregarConfig();
     verificarStatus();
+    verificarSaude(); // <--- CHAMADA INICIAL
     carregarMensagens();
     setInterval(verificarStatus, 10000);
     setInterval(carregarMensagens, 60000);
     setInterval(carregarGruposNaoSync, 60000);
+    setInterval(verificarSaude, 30000); // <--- ATUALIZAÇÃO PERIÓDICA
   </script>
 </body>
 </html>
