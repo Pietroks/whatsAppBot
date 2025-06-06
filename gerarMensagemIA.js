@@ -5,6 +5,7 @@ const axios = require('axios');
 const pdfParse = require('pdf-parse');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+console.log(chalk.cyanBright("Verificando a chave da API no 'gerarMensagemIA':", OPENAI_API_KEY ? `Chave encontrada começando com: ${OPENAI_API_KEY.substring(0, 5)}...` : "CHAVE NÃO ENCONTRADA OU VAZIA"));
 
 async function gerarMensagemIA(nomeGrupoOuCurso, grupoId) {
   try {
