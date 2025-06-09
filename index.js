@@ -132,7 +132,7 @@ function logDashboard(msg) {
 // --- MELHORIA: Função de sincronização mais resiliente ---
 async function sincronizarGrupos() {
     if (clientEmDesconexao || !clientAtivo()) {
-        logDashboard('⚠️ WhatsApp não está conectado. Cancelando sincronização.');
+        logDashboard('⚠️ WhatsApp não conectado. Sincronização cancelada.');
         return;
     }
 
@@ -140,29 +140,27 @@ async function sincronizarGrupos() {
     let sucessoBuscaChats = false;
 
     try {
-        // Tenta buscar os chats, mas não quebra se falhar
         const chats = await client.getChats();
         todosGrupos = chats.filter(c => c.isGroup).map(g => ({ id: g.id._serialized, name: g.name }));
         logDashboard(`🔍 ${todosGrupos.length} grupos encontrados no WhatsApp.`);
         sucessoBuscaChats = true;
     } catch (error) {
         logDashboard(chalk.yellow(`⚠️ Aviso: Falha ao buscar a lista de grupos do WhatsApp (client.getChats). O erro foi ignorado. Causa: ${error.message}`));
-        // Se a busca falhar, vamos trabalhar com os grupos que já temos salvos para não parar o bot.
     }
+
     let gruposSalvos = [];
     try {
         gruposSalvos = JSON.parse(await fs.readFile(gruposSyncPath, 'utf-8'));
-    } catch {
-        logDashboard('⚠️ Nenhum grupo sincronizado previamente.');
-    }
+    } catch {}
 
     gruposValidos = removerDuplicados(gruposSalvos);
 
+    // SÓ atualiza a lista de não sincronizados se a busca no WhatsApp deu certo.
     if (sucessoBuscaChats) {
         const naoSincronizados = todosGrupos.filter(g => !gruposValidos.some(v => v.id === g.id));
         await salvarJSONSeDiferente(gruposNaoSyncPath, naoSincronizados);
     }
-
+    
     logDashboard(`✅ ${gruposValidos.length} grupos válidos e configurados para envio.`);
 }
 
@@ -216,25 +214,25 @@ async function enviarMensagensEmLote() {
     logDashboard(`🤖 Iniciando envio em lote para ${gruposValidos.length} grupo(s).`);
     const config = await carregarConfig();
     const INTERVALO = config.delayEnvioMs || 15000;
+    let historicoCompleto = {};
+    try {
+        historicoCompleto = JSON.parse(await fs.readFile(mensagensEnviadasPath, 'utf-8'));
+    } catch {}
+
     for (let i = 0; i < gruposValidos.length; i++) {
         const grupo = gruposValidos[i];
         if (i > 0) await delay(INTERVALO);
-        const enviado = await enviarMensagemParaGrupo(grupo);
+        const enviado = await enviarMensagemParaGrupo(grupo, historicoCompleto);
         if (!enviado) logDashboard(`⏩ Nenhuma nova mensagem para "${grupo.name}".`);
     }
 }
 
-async function enviarMensagemParaGrupo(grupo) {
+async function enviarMensagemParaGrupo(grupo, historicoCompleto) {
     try {
         const nomeGrupo = grupo.name;
         let mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
 
-        let historico = {};
-        try {
-            historico = JSON.parse(await fs.readFile(mensagensEnviadasPath, 'utf-8'));
-        } catch { }
-
-        const ultimas = (historico[grupo.id]?.map(m => m.mensagem.trim()) || []).slice(-10);
+        const ultimas = (historicoCompleto[grupo.id]?.map(m => m.mensagem.trim()) || []).slice(-10);
         let tentativas = 0;
 
         while (ultimas.includes(mensagem.trim()) && tentativas < 3) {
@@ -352,6 +350,42 @@ app.post('/api/sincronizar-grupo', async (req, res) => {
     }
 });
 
+// Desincronizar Grupo Sincronizado
+app.post('/api/desincronizar-grupo', async (req, res) => {
+    const { id, name } = req.body;
+    if (!id || !name) {
+        return res.status(400).json({error: 'ID e nome do grupo são obrigatórios'});
+    }
+    
+    try {
+        // carregar os dois arquivos de grupos
+        const gruposSyncRaw = await fs.readFile(gruposSyncPath, 'utf-8').catch(() => '[]');
+        const gruposNaoSyncRaw = (await fs.readFile(gruposNaoSyncPath, 'utf-8').catch(() => '[]'));
+        let gruposSync = JSON.parse(gruposSyncRaw);
+        let gruposNaoSync = JSON.parse(gruposNaoSyncRaw);
+
+        // remove o grupo da lista dos sincronizados
+        const novosGruposSync = gruposSync.filter(g => g.id !== id);
+
+        // adiciona o grupo de novo na lista dos desincronizados (se ja nao estiver la)
+        if (!gruposNaoSync.find(g => g.id === id)) {
+            gruposNaoSync.push({ id, name });
+        }
+
+        // salva as alteraçoes nos dois arquivos
+        await salvarJSONSeDiferente(gruposSyncPath, novosGruposSync);
+        await salvarJSONSeDiferente(gruposNaoSyncPath, gruposNaoSync);
+
+        // atualiza a lista de grupos validos na memoria
+        gruposValidos = removerDuplicados(novosGruposSync);
+        logDashboard(`➖ Grupo "${name}" foi desincronizado via dashboard.`);
+        res.json({ ok: true });
+    } catch (err) {
+        logDashboard(`❌ Erro ao desincronizar o grupo "${name}": ${err.message}`);
+        res.status(500).json({ error: 'Falha ao desincronizar grupo.' });
+    }
+})
+
 // --- NOVA ROTA: Testar mensagem da IA ---
 app.post('/api/testar-mensagem', async (req, res) => {
     const { id, name } = req.body;
@@ -383,6 +417,44 @@ app.get('/api/grupos-sincronizados', async (req, res) => {
 // ... (outras rotas da API: /mensagens, /iniciar, /parar, /config, etc.)
 // ... (O código das outras rotas permanece o mesmo)
 app.get('/api/mensagens', async (req, res) => {
+    try {
+        const data = await fs.readFile(mensagensEnviadasPath, 'utf-8');
+        const historico = JSON.parse(data);
+
+        // pega os parametros da url
+        const pagina = parseInt(req.query.page) || 1;
+        const limite = parseInt(req.query.limit) || 10; // 20 mensagens por pagina
+
+        // transforma o objeto de historico em uma lista unica e ordena pela data mais recente
+        const todasMsgs = Object.values(historico).flat().sort((a, b) => new Date(b.horario) - new Date(a.horario));
+
+        const totalMensagens = todasMsgs.length;
+        const totalPaginas = Math.ceil(totalMensagens / limite);
+
+        // fatia a lista para pegar apenas as mensagens da pagina atual
+        const inicio = (pagina - 1) * limite;
+        const fim = inicio + limite;
+        const msgsPaginadas = todasMsgs.slice(inicio, fim);
+
+        // retorna um objeto estruturado com as mensagens e informçoes da paginaçao
+        res.json ({
+            mensagens: msgsPaginadas,
+            paginaAtual: pagina,
+            totalPaginas: totalPaginas,
+            totalMensagens: totalMensagens
+        });
+    } catch {
+        // se nao houver historico retorne uma estrutura vazia
+        res.json({
+            mensagens: [],
+            paginaAtual: 1,
+            totalPaginas: 1,
+            totalMensagens: 0
+        });
+    }
+});
+
+app.get('/api/mensagens/all', async (req, res) => {
     try {
         const data = await fs.readFile(mensagensEnviadasPath, 'utf-8');
         res.json(JSON.parse(data));
