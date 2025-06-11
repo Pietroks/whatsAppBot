@@ -5,6 +5,75 @@ const modalTeste = new bootstrap.Modal(document.getElementById('modalTeste'));
 const botaoAcao = document.getElementById('botao-acao');
 
 // ... (funções de controle, sockets e histórico permanecem as mesmas)
+async function showToast(message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) return;
+
+    const toastColor = {
+        success: 'bg-success',
+        danger: 'bg-danger',
+        warning: 'bg-warning',
+        info: 'bg-info'
+    }[type];
+
+    const toastId = `toast-${Date.now()}`;
+
+    const toastHTML = `
+        <div id="${toastId}" class="toast align-items-center text-white ${toastColor} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, { delay: 4000 });
+    toast.show();
+
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+
+function showConfirm(question) {
+    const modalElement = document.getElementById('modalConfirm');
+    const confirmModal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+    document.getElementById('confirmQuestion').textContent = question;
+
+    return new Promise((resolve) => {
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+
+        const onOk = () => {
+            resolve(true);
+            confirmModal.hide();
+            cleanup();
+        };
+
+        const onCancel = () => {
+            resolve(false);
+            confirmModal.hide();
+            cleanup();
+        };
+
+        const cleanup = () => {
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+        }
+
+        okBtn.addEventListener('click', onOk, { once: true });
+        cancelBtn.addEventListener('click', onCancel, { once: true });
+
+        confirmModal.show();
+    });
+}
+
 async function verificarStatus() {
     try {
         const res = await fetch(`${API_BOT}/api/status`);
@@ -21,7 +90,7 @@ async function verificarStatus() {
     } catch {
         botaoAcao.textContent = '❌ Bot offline';
         botaoAcao.className = 'btn btn-outline-secondary';
-        botaoAcao.onclick = () => alert('Servidor não disponível');
+        botaoAcao.onclick = () => showToast('❌ Servidor não disponível', 'danger');
     }
 }
 
@@ -37,26 +106,28 @@ async function carregarConfig() {
 async function atualizarConfig() {
     const minutos = parseInt(document.getElementById('intervalo').value);
     const delay = parseInt(document.getElementById('delay').value);
-    if (!minutos || minutos < 1) return alert('⚠️ Informe um intervalo válido (mínimo 1 minuto)');
-    if (!delay || delay < 1000) return alert('⚠️ Informe um delay válido (mínimo 1000ms)');
+    if (!minutos || minutos < 1) return showToast('⚠️ Informe um intervalo válido (mínimo 1 minuto)', 'warning');
+    if (!delay || delay < 1000) return showToast('⚠️ Informe um delay válido (mínimo 1000ms)', 'warning');
 
     const res = await fetch(`${API_BOT}/api/config`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ intervaloMinutos: minutos, delayEnvioMs: delay })
     });
-    if (res.ok) alert(`💾 Configurações atualizadas!`);
-    else alert(`❌ Erro ao atualizar.`);
+    if (res.ok) showToast(`💾 Configurações atualizadas!`, 'success');
+    else showToast(`❌ Erro ao atualizar.`, 'danger');
 }
 
 function abrirQrCode() { modalQr.show(); }
+
 async function desconectarBot() {
-    if (!confirm('Deseja mesmo desconectar do WhatsApp?')) return;
+    if (!await showConfirm('Deseja mesmo desconectar do WhatsApp?')) return;
     const res = await fetch(`${API_BOT}/api/desconectar`, { method: 'POST' });
-    if (res.ok) alert('🔌 Desconectado do WhatsApp!');
-    else alert('❌ Erro ao desconectar.');
+    if (res.ok) showToast('🔌 Desconectado do WhatsApp!', 'info');
+    else showToast('❌ Erro ao desconectar.', 'danger');
     verificarStatus();
 }
+
 function acaoBot() {}
 
 socket.on('log', msg => {
@@ -77,8 +148,6 @@ socket.on('status', status => {
 async function carregarMensagens(pagina = 1) {
     const res = await fetch(`/api/mensagens?page=${pagina}&limit=10`);
     const dados = await res.json();
-
-    console.log('DADOS RECEBIDOS DA API:', dados); 
 
     const tbody = document.getElementById('tabela-mensagens');
     tbody.innerHTML = '';
@@ -104,8 +173,6 @@ async function carregarDadosGraficos() {
 }
 
 function renderizarPaginacao(paginaAtual, totalPaginas) {
-    console.log(`RENDERIZANDO PAGINAÇÃO: Página Atual=<span class="math-inline">\{paginaAtual\}, Total de Páginas\=</span>{totalPaginas}`);
-
     const containerPaginacao = document.getElementById('paginacao');
     containerPaginacao.innerHTML = '';
 
@@ -174,11 +241,11 @@ function desenharGrafico(contagem) {
 
 async function iniciarBot() {
     await fetch(`${API_BOT}/api/iniciar`, { method: 'POST' });
-    alert('✅ Bot iniciado');
+    showToast('✅ Bot iniciado', 'success');
 }
 async function pararBot() {
     await fetch(`${API_BOT}/api/parar`, { method: 'POST' });
-    alert('⏹️ Bot parado');
+    showToast('⏹️ Bot parado', 'info');
 }
 
 // --- LÓGICA DE GRUPOS ATUALIZADA ---
@@ -219,7 +286,7 @@ async function carregarGruposSync() {
 }
 
 async function desincronizarGrupo(id, name) {
-    if (!confirm(`Deseja realmente DESINCRONIZAR o grupo "${name}"?`)) return;
+    if (!await showConfirm(`Deseja realmente DESINCRONIZAR o grupo "${name}"?`)) return;
 
     const res = await fetch('/api/desincronizar-grupo', {
     method: 'POST',
@@ -228,28 +295,28 @@ async function desincronizarGrupo(id, name) {
     });
 
     if (res.ok) {
-    alert(`➖ Grupo "${name}" foi desincronizado!`);
+    showToast(`➖ Grupo "${name}" foi desincronizado!`, 'info');
     // atualiza as duas tabelas para garantir a mudança
     carregarGruposSync();
     carregarGruposNaoSync();
     } else {
-    alert(`❌ Erro ao desincronizar.`);
+    showToast(`❌ Erro ao desincronizar.`, 'danger');
     }
 }
 
 async function sincronizarGrupo(id, name) {
-    if (!confirm(`Deseja realmente sincronizar o grupo "${name}"?`)) return;
+    if (!await showConfirm(`Deseja realmente sincronizar o grupo "${name}"?`)) return;
     const res = await fetch('/api/sincronizar-grupo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, name })
     });
     if (res.ok) {
-        alert(`✅ Grupo "${name}" sincronizado!`);
+        showToast(`✅ Grupo "${name}" sincronizado!`, 'success');
         carregarGruposSync();
         carregarGruposNaoSync();
     } else {
-        alert(`❌ Erro ao sincronizar.`);
+        showToast(`❌ Erro ao sincronizar.`, 'danger');
     }
 }
 

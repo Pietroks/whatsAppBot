@@ -8,14 +8,13 @@ require('dotenv').config();
 const axiosRetry = require('axios-retry').default;
 const chalk = require('chalk');
 const gerarMensagemIA = require('./gerarMensagemIA');
-// A linha abaixo foi removida na etapa anterior para corrigir conflitos.
-// Se você a removeu, pode manter assim. Se não, remova-a.
-// const { executablePath } = require('puppeteer');
+const createApiRouter = require('./routes/api.js');
 
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const bodyParser = require('body-parser');
+const { stat } = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -51,9 +50,13 @@ const configPath = path.join(__dirname, 'config.json');
 
 // --- Variáveis de Estado ---
 let client;
-let gruposValidos = [];
 let agendamento;
-let clientEmDesconexao = false;
+let state = {
+    gruposValidos: [],
+    clientEmDesconexao: false,
+    mensagensPreGeradas: new Map(),
+    isQrCodeVisible: false
+};
 
 // --- Middlewares do Express ---
 app.use(bodyParser.json());
@@ -75,6 +78,8 @@ function removerDuplicados(grupos) {
 }
 
 async function restartClient() {
+    state.isQrCodeVisible = false;
+
     try {
         if (client) {
             await client.destroy();
@@ -93,15 +98,23 @@ function configurarEventosClient() {
     client.on('qr', async qr => {
         try {
             const qrImage = await qrcode.toDataURL(qr);
-            logDashboard('📲 QR Code gerado! Escaneie para conectar...');
             io.emit('qr', qrImage);
+
+            if (!state.isQrCodeVisible) {
+                logDashboard('📲 QR Code gerado! Escaneie para conectar...');
+                state.isQrCodeVisible = true;
+            } else {
+                logTerminal('ℹ️ Imagem do QR Code foi atualizada no dashboard.');
+            } 
         } catch (err) {
-            logDashboard('❌ Erro ao gerar QR Code: ' + err.message);
+            logDashboard('❌ Erro ao gerar/atualizar QR Code: ' + err.message);
         }
     });
 
     client.on('ready', async () => {
         logDashboard('✅ Bot conectado com sucesso!');
+        state.isQrCodeVisible = false;
+
         io.emit('status', 'conectado');
         try {
             logDashboard('🔄 Sincronizando grupos...');
@@ -115,6 +128,8 @@ function configurarEventosClient() {
 
     client.on('disconnected', reason => {
         logDashboard(`🔌 Desconectado: ${reason}`);
+        state.isQrCodeVisible = false;
+
         io.emit('status', 'desconectado');
     });
 
@@ -129,9 +144,13 @@ function logDashboard(msg) {
     io.emit('log', msg);
 }
 
+function logTerminal(msg) {
+    console.log(msg);
+}
+
 // --- MELHORIA: Função de sincronização mais resiliente ---
 async function sincronizarGrupos() {
-    if (clientEmDesconexao || !clientAtivo()) {
+    if (state.clientEmDesconexao || !clientAtivo()) {
         logDashboard('⚠️ WhatsApp não conectado. Sincronização cancelada.');
         return;
     }
@@ -145,7 +164,7 @@ async function sincronizarGrupos() {
         logDashboard(`🔍 ${todosGrupos.length} grupos encontrados no WhatsApp.`);
         sucessoBuscaChats = true;
     } catch (error) {
-        logDashboard(chalk.yellow(`⚠️ Aviso: Falha ao buscar a lista de grupos do WhatsApp (client.getChats). O erro foi ignorado. Causa: ${error.message}`));
+        logTerminal(chalk.yellow(`⚠️ Aviso: Falha ao buscar a lista de grupos do WhatsApp (client.getChats). O erro foi ignorado. Causa: ${error.message}`));
     }
 
     let gruposSalvos = [];
@@ -153,15 +172,15 @@ async function sincronizarGrupos() {
         gruposSalvos = JSON.parse(await fs.readFile(gruposSyncPath, 'utf-8'));
     } catch {}
 
-    gruposValidos = removerDuplicados(gruposSalvos);
+    state.gruposValidos = removerDuplicados(gruposSalvos);
 
     // SÓ atualiza a lista de não sincronizados se a busca no WhatsApp deu certo.
     if (sucessoBuscaChats) {
-        const naoSincronizados = todosGrupos.filter(g => !gruposValidos.some(v => v.id === g.id));
+        const naoSincronizados = todosGrupos.filter(g => !state.gruposValidos.some(v => v.id === g.id));
         await salvarJSONSeDiferente(gruposNaoSyncPath, naoSincronizados);
     }
     
-    logDashboard(`✅ ${gruposValidos.length} grupos válidos e configurados para envio.`);
+    logDashboard(`✅ ${state.gruposValidos.length} grupos válidos e configurados para envio.`);
 }
 
 async function iniciarAgendamento() {
@@ -206,7 +225,7 @@ async function enviarMensagensEmLote() {
         return;
     }
 
-    if (clientEmDesconexao || !clientAtivo()) {
+    if (state.clientEmDesconexao || !clientAtivo()) {
         logDashboard('⚠️ WhatsApp não está conectado. Cancelando envio.');
         return;
     }
@@ -219,8 +238,8 @@ async function enviarMensagensEmLote() {
         historicoCompleto = JSON.parse(await fs.readFile(mensagensEnviadasPath, 'utf-8'));
     } catch {}
 
-    for (let i = 0; i < gruposValidos.length; i++) {
-        const grupo = gruposValidos[i];
+    for (let i = 0; i < state.gruposValidos.length; i++) {
+        const grupo = state.gruposValidos[i];
         if (i > 0) await delay(INTERVALO);
         const enviado = await enviarMensagemParaGrupo(grupo, historicoCompleto);
         if (!enviado) logDashboard(`⏩ Nenhuma nova mensagem para "${grupo.name}".`);
@@ -230,25 +249,44 @@ async function enviarMensagensEmLote() {
 async function enviarMensagemParaGrupo(grupo, historicoCompleto) {
     try {
         const nomeGrupo = grupo.name;
-        let mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
+        let mensagem; // Apenas declara a variável
 
-        const ultimas = (historicoCompleto[grupo.id]?.map(m => m.mensagem.trim()) || []).slice(-10);
-        let tentativas = 0;
-
-        while (ultimas.includes(mensagem.trim()) && tentativas < 3) {
-            logDashboard(`🔄 Mensagem para "${nomeGrupo}" é repetida. Tentando gerar outra...`);
+        // 1. VERIFICA O CACHE PRIMEIRO
+        if (state.mensagensPreGeradas.has(grupo.id)) {
+            // Se encontrou uma mensagem no cache, usa ela
+            mensagem = state.mensagensPreGeradas.get(grupo.id);
+            logDashboard(`✔️ Usando mensagem pré-aprovada do cache para "${nomeGrupo}".`);
+            // Limpa o cache para este grupo, pois a mensagem será usada agora
+            state.mensagensPreGeradas.delete(grupo.id);
+        
+        } else {
+            // 2. SE NÃO HOUVER CACHE, GERA UMA NOVA MENSAGEM (lógica antiga)
+            logDashboard(`🧠 Nenhuma mensagem em cache. Gerando nova mensagem para "${nomeGrupo}"...`);
             mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
-            tentativas++;
+
+            // 3. VERIFICA DUPLICIDADE (apenas para mensagens novas, não para as do cache)
+            const ultimas = (historicoCompleto[grupo.id]?.map(m => m.mensagem.trim()) || []).slice(-10);
+            let tentativas = 0;
+            
+            while (ultimas.includes(mensagem.trim()) && tentativas < 3) {
+                logDashboard(`🔄 Mensagem para "${nomeGrupo}" é repetida. Tentando gerar outra...`);
+                mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
+                tentativas++;
+            }
+            
+            // Se mesmo após as tentativas a mensagem ainda for repetida, pula o envio
+            if (ultimas.includes(mensagem.trim())) {
+                logDashboard(`⏩ Mensagem para "${nomeGrupo}" ainda é repetida após tentativas. Pulando envio.`);
+                return false;
+            }
         }
 
-        if (!ultimas.includes(mensagem.trim())) {
-            await client.sendMessage(grupo.id, mensagem);
-            await salvarMensagemNoHistorico(grupo.id, mensagem, nomeGrupo);
-            logDashboard(`📤 Mensagem enviada para "${nomeGrupo}"`);
-            return true;
-        }
+        // 4. ENVIA A MENSAGEM (seja ela do cache ou recém-gerada)
+        await client.sendMessage(grupo.id, mensagem);
+        await salvarMensagemNoHistorico(grupo.id, mensagem, nomeGrupo);
+        logDashboard(`📤 Mensagem enviada para "${nomeGrupo}"`);
+        return true;
 
-        return false;
     } catch (err) {
         logDashboard(`❌ Erro ao enviar para "${grupo.name}": ${err.message}`);
         return false;
@@ -308,281 +346,19 @@ async function salvarConfig(config) {
     await salvarJSONSeDiferente(configPath, config);
 }
 
-// --- 📡 API do Dashboard ---
+// --- 📡 CONFIGURAÇAO DAS ROTAS do Dashboard ---
+const dependencies = {
+    logDashboard, logTerminal, clientAtivo, sincronizarGrupos, iniciarAgendamento, pararAgendamento, restartClient,
+    salvarJSONSeDiferente, carregarConfig, salvarConfig, delay, gerarMensagemIA,
+    path, fs,
+    gruposSyncPath, gruposNaoSyncPath, mensagensEnviadasPath, configPath,
+    get client() { return client }, 
+    state
+};
 
-app.post('/api/sincronizar-grupo', async (req, res) => {
-    const { id, name } = req.body;
-    if (!id || !name) return res.status(400).json({ error: 'ID e nome do grupo sao obrigatorios' });
+const apiRouter = createApiRouter(dependencies);
+app.use('/api', apiRouter);
 
-    try {
-        const gruposSyncRaw = await fs.readFile(gruposSyncPath, 'utf-8').catch(() => '[]');
-        const gruposNaoSyncRaw = await fs.readFile(gruposNaoSyncPath, 'utf-8').catch(() => '[]');
-
-        let gruposSync = JSON.parse(gruposSyncRaw);
-        let gruposNaoSync = JSON.parse(gruposNaoSyncRaw);
-
-        if (!gruposSync.find(g => g.id === id)) {
-            gruposSync.push({ id, name });
-        }
-
-        const novosNaoSync = gruposNaoSync.filter(g => g.id !== id);
-
-        await salvarJSONSeDiferente(gruposSyncPath, gruposSync);
-        await salvarJSONSeDiferente(gruposNaoSyncPath, novosNaoSync);
-
-        gruposValidos = removerDuplicados(gruposSync);
-        logDashboard(`✅ Grupo "${name}" sincronizado manualmente via dashboard.`);
-        
-        // Chama a sincronização, mas não quebra o app se falhar
-        await sincronizarGrupos();
-
-        const config = await carregarConfig();
-        if (config.habilitado) {
-            await iniciarAgendamento();
-        }
-
-        res.json({ ok: true });
-    } catch (err) {
-        // A versão melhorada de sincronizarGrupos não deve mais lançar este erro,
-        // mas o catch é mantido como segurança.
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Desincronizar Grupo Sincronizado
-app.post('/api/desincronizar-grupo', async (req, res) => {
-    const { id, name } = req.body;
-    if (!id || !name) {
-        return res.status(400).json({error: 'ID e nome do grupo são obrigatórios'});
-    }
-    
-    try {
-        // carregar os dois arquivos de grupos
-        const gruposSyncRaw = await fs.readFile(gruposSyncPath, 'utf-8').catch(() => '[]');
-        const gruposNaoSyncRaw = (await fs.readFile(gruposNaoSyncPath, 'utf-8').catch(() => '[]'));
-        let gruposSync = JSON.parse(gruposSyncRaw);
-        let gruposNaoSync = JSON.parse(gruposNaoSyncRaw);
-
-        // remove o grupo da lista dos sincronizados
-        const novosGruposSync = gruposSync.filter(g => g.id !== id);
-
-        // adiciona o grupo de novo na lista dos desincronizados (se ja nao estiver la)
-        if (!gruposNaoSync.find(g => g.id === id)) {
-            gruposNaoSync.push({ id, name });
-        }
-
-        // salva as alteraçoes nos dois arquivos
-        await salvarJSONSeDiferente(gruposSyncPath, novosGruposSync);
-        await salvarJSONSeDiferente(gruposNaoSyncPath, gruposNaoSync);
-
-        // atualiza a lista de grupos validos na memoria
-        gruposValidos = removerDuplicados(novosGruposSync);
-        logDashboard(`➖ Grupo "${name}" foi desincronizado via dashboard.`);
-        res.json({ ok: true });
-    } catch (err) {
-        logDashboard(`❌ Erro ao desincronizar o grupo "${name}": ${err.message}`);
-        res.status(500).json({ error: 'Falha ao desincronizar grupo.' });
-    }
-})
-
-// --- NOVA ROTA: Testar mensagem da IA ---
-app.post('/api/testar-mensagem', async (req, res) => {
-    const { id, name } = req.body;
-    if (!id || !name) {
-        return res.status(400).json({ error: 'ID e Nome do grupo são obrigatórios.' });
-    }
-    try {
-        logDashboard(`🧪 Gerando mensagem de teste para "${name}"...`);
-        const mensagem = await gerarMensagemIA(name, id);
-        logDashboard(`✨ Mensagem de teste gerada.`);
-        res.json({ mensagem });
-    } catch (error) {
-        logDashboard(`❌ Erro ao gerar mensagem de teste: ${error.message}`);
-        res.status(500).json({ error: 'Falha ao gerar mensagem da IA.' });
-    }
-});
-
-// --- NOVA ROTA: Obter grupos sincronizados ---
-app.get('/api/grupos-sincronizados', async (req, res) => {
-    try {
-        const data = await fs.readFile(gruposSyncPath, 'utf-8');
-        res.json(JSON.parse(data));
-    } catch {
-        res.json([]);
-    }
-});
-
-
-// ... (outras rotas da API: /mensagens, /iniciar, /parar, /config, etc.)
-// ... (O código das outras rotas permanece o mesmo)
-app.get('/api/mensagens', async (req, res) => {
-    try {
-        const data = await fs.readFile(mensagensEnviadasPath, 'utf-8');
-        const historico = JSON.parse(data);
-
-        // pega os parametros da url
-        const pagina = parseInt(req.query.page) || 1;
-        const limite = parseInt(req.query.limit) || 10; // 20 mensagens por pagina
-
-        // transforma o objeto de historico em uma lista unica e ordena pela data mais recente
-        const todasMsgs = Object.values(historico).flat().sort((a, b) => new Date(b.horario) - new Date(a.horario));
-
-        const totalMensagens = todasMsgs.length;
-        const totalPaginas = Math.ceil(totalMensagens / limite);
-
-        // fatia a lista para pegar apenas as mensagens da pagina atual
-        const inicio = (pagina - 1) * limite;
-        const fim = inicio + limite;
-        const msgsPaginadas = todasMsgs.slice(inicio, fim);
-
-        // retorna um objeto estruturado com as mensagens e informçoes da paginaçao
-        res.json ({
-            mensagens: msgsPaginadas,
-            paginaAtual: pagina,
-            totalPaginas: totalPaginas,
-            totalMensagens: totalMensagens
-        });
-    } catch {
-        // se nao houver historico retorne uma estrutura vazia
-        res.json({
-            mensagens: [],
-            paginaAtual: 1,
-            totalPaginas: 1,
-            totalMensagens: 0
-        });
-    }
-});
-
-app.get('/api/mensagens/all', async (req, res) => {
-    try {
-        const data = await fs.readFile(mensagensEnviadasPath, 'utf-8');
-        res.json(JSON.parse(data));
-    } catch {
-        res.json({});
-    }
-});
-
-app.post('/api/iniciar', async (req, res) => {
-    const config = await carregarConfig();
-    config.habilitado = true;
-    await salvarConfig(config);
-    await iniciarAgendamento();
-    logDashboard('▶️ Agendamento iniciado via dashboard.');
-    res.json({ ok: true });
-});
-
-app.post('/api/parar', async (req, res) => {
-    const config = await carregarConfig();
-    config.habilitado = false;
-    await salvarConfig(config);
-    await pararAgendamento();
-    logDashboard('⏹️ Agendamento parado via dashboard.');
-    res.json({ ok: true });
-});
-
-app.post('/api/config', async (req, res) => {
-    const config = await carregarConfig();
-    const novoIntervalo = parseInt(req.body.intervaloMinutos);
-    if (isNaN(novoIntervalo) || novoIntervalo < 1) {
-        return res.status(400).json({ error: 'Intervalo inválido. Deve ser >= 1 minuto.' });
-    }
-    config.intervaloMinutos = novoIntervalo;
-    if (req.body.delayEnvioMs !== undefined) {
-        const novoDelay = parseInt(req.body.delayEnvioMs);
-        if (isNaN(novoDelay) || novoDelay < 1000) {
-            return res.status(400).json({ error: 'Delay inválido. Deve ser >= 1000 ms.' });
-        }
-        config.delayEnvioMs = novoDelay;
-    }
-    await salvarConfig(config);
-    if (config.habilitado) {
-        await iniciarAgendamento();
-    }
-    logDashboard(`💾 Configuração atualizada: intervalo ${config.intervaloMinutos} minutos, delay ${config.delayEnvioMs} ms.`);
-    res.json({ ok: true, config });
-});
-
-app.post('/api/desconectar', async (req, res) => {
-    if (!clientAtivo()) {
-        logDashboard('⚠️ Cliente não está pronto para desconectar.');
-        return res.status(400).json({ error: 'cliente nao esta pronto.' });
-    }
-    try {
-        logDashboard('🔌 Bot desconectado via dashboard.');
-        clientEmDesconexao = true;
-        await pararAgendamento();
-        await client.logout();
-        await delay(1000);
-        await client.destroy();
-        await restartClient();
-        clientEmDesconexao = false;
-        res.json({ ok: true });
-    } catch (err) {
-        clientEmDesconexao = false;
-        logDashboard('❌ Erro ao desconectar: ' + err.message);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.get('/api/status', (req, res) => {
-    res.json({ status: clientAtivo() ? 'conectado' : 'desconectado' });
-});
-
-app.get('/api/grupos-nao-sincronizados', async (req, res) => {
-    try {
-        const data = await fs.readFile(gruposNaoSyncPath, 'utf-8');
-        res.json(JSON.parse(data));
-    } catch {
-        res.json([]);
-    }
-});
-
-app.get('/api/health', async (req, res) => {
-    const health = {
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        checks: {}
-    };
-
-    let isCriticalError = false;
-
-    health.checks.whatsapp = {
-        status: clientAtivo() ? 'ok' : 'error',
-        message: clientAtivo() ? 'Conectado' : 'Desconectado do WhatsApp'
-    };
-    if (!clientAtivo()) isCriticalError = true;
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    health.checks.ai_api = {
-        status: apiKey ? 'ok' : 'error',
-        message: apiKey ? 'Chave da API encontrada.' : 'Variável de ambiente OPENAI_API_KEY não configurada.'
-    };
-    if (!apiKey) isCriticalError = true;
-
-    try {
-        await fs.access(configPath);
-        health.checks.filesystem = {
-            status: 'ok',
-            message: 'Acesso ao arquivo config.json está funcional.'
-        };
-    } catch (error) {
-        health.checks.filesystem = {
-            status: 'error',
-            message: 'Não foi possível acessar o arquivo de configuração (config.json).'
-        };
-        isCriticalError = true;
-    }
-
-    if (isCriticalError) health.status = 'error';
-    
-    res.status(isCriticalError ? 503 : 200).json(health);
-});
-
-app.get('/api/config', async (req, res) => {
-    const config = await carregarConfig();
-    res.json(config);
-});
 
 // --- Rota da Interface ---
 app.get('/', (req, res) => {

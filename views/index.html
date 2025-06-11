@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-light p-4">
+  <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100"></div>
   <div class="container">
     <ul class="nav nav-tabs mb-3" id="tabs">
       <li class="nav-item">
@@ -27,7 +28,25 @@
       <div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">🧪 Mensagem de Teste Gerada</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="conteudo-teste" class="alert alert-info"></div></div></div></div>
     </div>
 
-    <h1 class="mb-4 text-center">🤖 Dashboard do Bot WhatsApp</h1>
+    <div class="modal fade" id="modalConfirm" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmTitle">⚠️ Confirmação</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmQuestion">Você tem certeza que deseja realizar esta ação?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="confirmCancelBtn">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="confirmOkBtn">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h1 class="mb-4 text-center">🤖 Dashboard | Bot WhatsApp</h1>
 
     <div class="mb-3 d-flex gap-2 flex-wrap">
       <button class="btn btn-success" onclick="iniciarBot()">▶️ Iniciar</button>

@@ -1,0 +1,276 @@
+// routes/api.js
+
+const express = require('express');
+const fs = require('fs').promises;
+
+// Esta função cria e configura o roteador.
+// Ela recebe as dependências (funções e variáveis) do arquivo principal.
+function createApiRouter(dependencies) {
+    const {
+        logDashboard,
+        logTerminal,
+        clientAtivo,
+        sincronizarGrupos,
+        iniciarAgendamento,
+        pararAgendamento,
+        restartClient,
+        salvarJSONSeDiferente,
+        carregarConfig,
+        salvarConfig,
+        delay,
+        gerarMensagemIA,
+        path,
+        gruposSyncPath,
+        gruposNaoSyncPath,
+        mensagensEnviadasPath,
+        configPath,
+        state: { gruposValidos, clientEmDesconexao }
+    } = dependencies;
+
+    const router = express.Router();
+
+    // --- ROTAS DO DASHBOARD ---
+
+    router.post('/sincronizar-grupo', async (req, res) => {
+        const { id, name } = req.body;
+        if (!id || !name) return res.status(400).json({ error: 'ID e nome do grupo sao obrigatorios' });
+    
+        try {
+            const gruposSyncRaw = await fs.readFile(gruposSyncPath, 'utf-8').catch(() => '[]');
+            const gruposNaoSyncRaw = await fs.readFile(gruposNaoSyncPath, 'utf-8').catch(() => '[]');
+    
+            let gruposSync = JSON.parse(gruposSyncRaw);
+            let gruposNaoSync = JSON.parse(gruposNaoSyncRaw);
+    
+            if (!gruposSync.find(g => g.id === id)) {
+                gruposSync.push({ id, name });
+            }
+    
+            const novosNaoSync = gruposNaoSync.filter(g => g.id !== id);
+    
+            await salvarJSONSeDiferente(gruposSyncPath, gruposSync);
+            await salvarJSONSeDiferente(gruposNaoSyncPath, novosNaoSync);
+    
+            dependencies.state.gruposValidos = gruposSync.map(g => g); // Atualiza a variável de estado
+            logDashboard(`✅ Grupo "${name}" sincronizado manualmente via dashboard.`);
+            
+            await sincronizarGrupos();
+    
+            const config = await carregarConfig();
+            if (config.habilitado) {
+                await iniciarAgendamento();
+            }
+    
+            res.json({ ok: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+    
+    router.post('/desincronizar-grupo', async (req, res) => {
+        const { id, name } = req.body;
+        if (!id || !name) {
+            return res.status(400).json({error: 'ID e nome do grupo são obrigatórios'});
+        }
+        
+        try {
+            const gruposSyncRaw = await fs.readFile(gruposSyncPath, 'utf-8').catch(() => '[]');
+            const gruposNaoSyncRaw = (await fs.readFile(gruposNaoSyncPath, 'utf-8').catch(() => '[]'));
+            let gruposSync = JSON.parse(gruposSyncRaw);
+            let gruposNaoSync = JSON.parse(gruposNaoSyncRaw);
+    
+            const novosGruposSync = gruposSync.filter(g => g.id !== id);
+    
+            if (!gruposNaoSync.find(g => g.id === id)) {
+                gruposNaoSync.push({ id, name });
+            }
+    
+            await salvarJSONSeDiferente(gruposSyncPath, novosGruposSync);
+            await salvarJSONSeDiferente(gruposNaoSyncPath, gruposNaoSync);
+    
+            dependencies.state.gruposValidos = novosGruposSync.map(g => g); // Atualiza a variável de estado
+            logDashboard(`➖ Grupo "${name}" foi desincronizado via dashboard.`);
+            logDashboard(`✅ ${novosGruposSync.length} grupos válidos e configurados para envio.`);
+            res.json({ ok: true });
+        } catch (err) {
+            logDashboard(`❌ Erro ao desincronizar o grupo "${name}": ${err.message}`);
+            res.status(500).json({ error: 'Falha ao desincronizar grupo.' });
+        }
+    });
+
+    router.post('/testar-mensagem', async (req, res) => {
+        const { id, name } = req.body;
+        
+        if (!id || !name) {
+            return req.status(400).json({ error: 'ID e Nome do grupo são obrigatórios.' });
+        }
+
+        try {
+            logDashboard(`🧪 Gerando mensagem de teste para "${name}"...`);
+            const mensagem = await gerarMensagemIA(name, id);
+
+            // gera a mensagem teste no cache, associada ao id do grupo
+            dependencies.state.mensagensPreGeradas.set(id, mensagem);
+            logDashboard(`👍 Mensagem para "${name}" foi pré-aprovada e salva no cache.`);
+
+            logDashboard(`✨ Mensagem de teste gerada.`);
+            res.json({ mensagem });
+        } catch (error) {
+            logDashboard(`❌ Erro ao gerar mensagem de teste: ${error.message}`);
+            res.status(500).json({ error: 'Falha ao gerar mensagem da IA' });
+        }
+    });
+
+    router.get('/grupos-sincronizados', async (req, res) => {
+        try {
+            const data = await fs.readFile(gruposSyncPath, 'utf-8');
+            res.json(JSON.parse(data));
+        } catch {
+            res.json([]);
+        }
+    });
+
+    router.get('/mensagens', async (req, res) => {
+        try {
+            const data = await fs.readFile(mensagensEnviadasPath, 'utf-8');
+            const historico = JSON.parse(data);
+            const pagina = parseInt(req.query.page) || 1;
+            const limite = parseInt(req.query.limit) || 10;
+            const todasMsgs = Object.values(historico).flat().sort((a, b) => new Date(b.horario) - new Date(a.horario));
+            const totalMensagens = todasMsgs.length;
+            const totalPaginas = Math.ceil(totalMensagens / limite);
+            const inicio = (pagina - 1) * limite;
+            const fim = inicio + limite;
+            const msgsPaginadas = todasMsgs.slice(inicio, fim);
+            res.json({
+                mensagens: msgsPaginadas,
+                paginaAtual: pagina,
+                totalPaginas: totalPaginas,
+                totalMensagens: totalMensagens
+            });
+        } catch {
+            res.json({ mensagens: [], paginaAtual: 1, totalPaginas: 1, totalMensagens: 0 });
+        }
+    });
+
+    router.get('/mensagens/all', async (req, res) => {
+        try {
+            const data = await fs.readFile(mensagensEnviadasPath, 'utf-8');
+            res.json(JSON.parse(data));
+        } catch {
+            res.json({});
+        }
+    });
+
+    router.post('/iniciar', async (req, res) => {
+        const config = await carregarConfig();
+        config.habilitado = true;
+        await salvarConfig(config);
+        await iniciarAgendamento();
+        logTerminal('▶️ Agendamento iniciado via dashboard.');
+        res.json({ ok: true });
+    });
+
+    router.post('/parar', async (req, res) => {
+        const config = await carregarConfig();
+        config.habilitado = false;
+        await salvarConfig(config);
+        await pararAgendamento();
+        logTerminal('⏹️ Agendamento parado via dashboard.');
+        res.json({ ok: true });
+    });
+
+    router.post('/config', async (req, res) => {
+        const config = await carregarConfig();
+        const novoIntervalo = parseInt(req.body.intervaloMinutos);
+        if (isNaN(novoIntervalo) || novoIntervalo < 1) {
+            return res.status(400).json({ error: 'Intervalo inválido. Deve ser >= 1 minuto.' });
+        }
+        config.intervaloMinutos = novoIntervalo;
+        if (req.body.delayEnvioMs !== undefined) {
+            const novoDelay = parseInt(req.body.delayEnvioMs);
+            if (isNaN(novoDelay) || novoDelay < 1000) {
+                return res.status(400).json({ error: 'Delay inválido. Deve ser >= 1000 ms.' });
+            }
+            config.delayEnvioMs = novoDelay;
+        }
+        await salvarConfig(config);
+        if (config.habilitado) {
+            await iniciarAgendamento();
+        }
+        logDashboard(`💾 Configuração atualizada: intervalo ${config.intervaloMinutos} minutos, delay ${config.delayEnvioMs} ms.`);
+        res.json({ ok: true, config });
+    });
+
+    router.post('/desconectar', async (req, res) => {
+        if (!clientAtivo()) {
+            logDashboard('⚠️ Cliente não está pronto para desconectar.');
+            return res.status(400).json({ error: 'cliente nao esta pronto.' });
+        }
+        try {
+            logDashboard('🔌 Bot desconectado via dashboard.');
+            dependencies.state.clientEmDesconexao = true;
+            await pararAgendamento();
+            await dependencies.client.logout();
+            await delay(1000);
+            await dependencies.client.destroy();
+            await restartClient();
+            dependencies.state.clientEmDesconexao = false;
+            res.json({ ok: true });
+        } catch (err) {
+            dependencies.state.clientEmDesconexao = false;
+            logDashboard('❌ Erro ao desconectar: ' + err.message);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    router.get('/status', (req, res) => {
+        res.json({ status: clientAtivo() ? 'conectado' : 'desconectado' });
+    });
+
+    router.get('/grupos-nao-sincronizados', async (req, res) => {
+        try {
+            const data = await fs.readFile(gruposNaoSyncPath, 'utf-8');
+            res.json(JSON.parse(data));
+        } catch {
+            res.json([]);
+        }
+    });
+
+    router.get('/health', async (req, res) => {
+        const health = {
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            checks: {}
+        };
+        let isCriticalError = false;
+
+        health.checks.whatsapp = { status: clientAtivo() ? 'ok' : 'error', message: clientAtivo() ? 'Conectado' : 'Desconectado do WhatsApp' };
+        if (!clientAtivo()) isCriticalError = true;
+
+        const apiKey = process.env.OPENAI_API_KEY;
+        health.checks.ai_api = { status: apiKey ? 'ok' : 'error', message: apiKey ? 'Chave da API encontrada.' : 'Variável de ambiente OPENAI_API_KEY não configurada.' };
+        if (!apiKey) isCriticalError = true;
+
+        try {
+            await fs.access(configPath);
+            health.checks.filesystem = { status: 'ok', message: 'Acesso ao arquivo config.json está funcional.' };
+        } catch (error) {
+            health.checks.filesystem = { status: 'error', message: 'Não foi possível acessar o arquivo de configuração (config.json).' };
+            isCriticalError = true;
+        }
+
+        if (isCriticalError) health.status = 'error';
+        res.status(isCriticalError ? 503 : 200).json(health);
+    });
+
+    router.get('/config', async (req, res) => {
+        const config = await carregarConfig();
+        res.json(config);
+    });
+
+    return router;
+}
+
+module.exports = createApiRouter;

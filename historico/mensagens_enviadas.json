@@ -64,6 +64,21 @@
       "nomeGrupo": "Escola de Programadores Mobile",
       "mensagem": "E aí pessoal, tudo bem? Estou dando uma olhada no conteúdo do curso e me deparei com o projeto final que vamos desenvolver. Um aplicativo de lista de tarefas com Jetpack Compose e Room parece ser um desafio interessante! Alguém já começou a pensar em como vai estruturar o seu aplicativo? Querem discutir um pouco sobre como vamos começar?",
       "horario": "2025-06-05T14:26:01.365Z"
+    },
+    {
+      "nomeGrupo": "Teste Bot",
+      "mensagem": "E aí, turma! Tudo certo com os estudos em \"Teste Bot\"? Qualquer dúvida, mandem aqui!",
+      "horario": "2025-06-06T13:59:31.112Z"
+    },
+    {
+      "nomeGrupo": "Teste Bot",
+      "mensagem": "Olá! Hoje é um bom momento para revisar os conteúdos do curso \"Teste Bot\". Em breve enviaremos novidades!",
+      "horario": "2025-06-06T14:00:31.360Z"
+    },
+    {
+      "nomeGrupo": "Teste Bot",
+      "mensagem": "E aí pessoal, tudo bem? Acabei de dar uma olhada no conteúdo do curso e estou bastante animado! O projeto final parece ser bem desafiador, mas com a trilha de aprendizado que o professor Celso Brunno preparou, acho que vamos conseguir fazer um aplicativo de lista de tarefas bem completo. Alguém já começou a se familiarizar com o IntelliJ IDEA e o Android Studio? Estou com um pouco de dificuldade em configurar o ambiente de desenvolvimento...",
+      "horario": "2025-06-06T14:15:33.389Z"
     }
   ],
   "120363400018454393@g.us": [
@@ -126,6 +141,51 @@
       "nomeGrupo": "Escola de Programadores",
       "mensagem": "E aí, pessoal! Tudo bem? Estou aqui revisando o material da Escola de Programadores e me deparei com uma parte que achei bem interessante. Vocês sabem que ao longo das 8 semanas, vamos desenvolver projetos práticos, certo? No nível 1, o foco é criar um portfólio web pessoal, enquanto no nível 2, vamos desenvolver um jogo interativo com Python e PyGame. Alguém já começou a se preparar ou pensando em como vai abordar esses projetos?",
       "horario": "2025-06-05T14:26:03.032Z"
+    },
+    {
+      "nomeGrupo": "Teste",
+      "mensagem": "Só para dar um alô e desejar foco total nos estudos do curso \"Teste\"!",
+      "horario": "2025-06-06T13:55:11.242Z"
+    },
+    {
+      "nomeGrupo": "Teste",
+      "mensagem": "Pessoal, passando para lembrar de dar uma olhada no material do curso \"Teste\". Bons estudos!",
+      "horario": "2025-06-06T13:59:15.854Z"
+    },
+    {
+      "nomeGrupo": "Teste",
+      "mensagem": "Uma ótima semana de estudos para todos do curso \"Teste\"! Vamos com tudo! ✨",
+      "horario": "2025-06-06T14:00:16.093Z"
+    },
+    {
+      "nomeGrupo": "Teste",
+      "mensagem": "E aí, pessoal! Queria compartilhar uma coisa que me chamou a atenção no material do curso. Vocês sabem que a gente vai ter um projeto final em cada nível, né? E o que achei legal é que no nível 3 a gente vai criar uma API funcional com Flask ou Django e banco de dados PostgreSQL. Alguém já tem ideia de como vai ser o projeto de vocês? Eu estou começando a pensar no meu... E aí, o que vocês acham? Querem trocar ideias?",
+      "horario": "2025-06-06T14:15:17.160Z"
+    },
+    {
+      "nomeGrupo": "Teste",
+      "mensagem": "E aí, pessoal! Queria compartilhar uma coisa que me chamou a atenção no material do curso. Vocês sabem que a gente vai ter um projeto final em cada nível, né? E o que eu achei legal é que no nível 3 a gente vai criar uma API funcional com Flask ou Django e PostgreSQL. Alguém já tem ideia de como vai ser isso? Eu estou um pouco perdido ainda... Se alguém tiver alguma dica ou explicação, pode compartilhar?",
+      "horario": "2025-06-06T19:00:17.913Z"
+    },
+    {
+      "nomeGrupo": "Teste",
+      "mensagem": "E aí, pessoal! Queria compartilhar uma coisa que achei interessante sobre o curso. Vocês sabem que vamos ter um projeto final em cada nível, né? No nível 1, vamos criar um portfólio web pessoal, que deve ser bem útil para mostrar nossos trabalhos. Alguém já começou a pensar no que vai criar? Eu estou começando a esboçar algumas ideias...",
+      "horario": "2025-06-06T19:30:17.668Z"
+    },
+    {
+      "nomeGrupo": "Teste",
+      "mensagem": "E aí, pessoal! Tudo bem? Estou dando uma olhada no material do curso e achei bem interessante essa parte sobre os Círculos de Estudos. Alguém já conhecia? Parece uma boa oportunidade para se aprofundar em tópicos específicos e trocar experiências com os colegas. O que vocês acham? Devemos participar?",
+      "horario": "2025-06-06T20:00:17.669Z"
+    },
+    {
+      "nomeGrupo": "Teste",
+      "mensagem": "E aí pessoal, tudo bem? Acabei de dar uma olhada no material do curso e estou bastante animado com o que vamos aprender! Vocês repararam que ao longo das 8 semanas vamos estar desenvolvendo projetos práticos em cada nível? No nível 1, por exemplo, o objetivo é criar um portfólio web pessoal, enquanto no nível 3 vamos construir uma API funcional com Flask/Django. Alguém já começou a se preparar ou tem alguma expectativa para o que vamos aprender?",
+      "horario": "2025-06-06T20:30:17.357Z"
+    },
+    {
+      "nomeGrupo": "Teste",
+      "mensagem": "E aí, pessoal! Tudo bem? Estou aqui revisando o material do curso e me deparei com a parte dos Círculos de Estudos. Alguém já conhecia? Parece que são encontros extras para aprofundar conhecimentos específicos e trocar experiências. Eu acho que seria uma ótima oportunidade para aprender mais e se conectar com os colegas. Alguém tem planos de se inscrever?",
+      "horario": "2025-06-11T12:48:00.061Z"
     }
   ],
   "120363399566451735@g.us": [
@@ -168,6 +228,66 @@
       "nomeGrupo": "1º Encontro Nacional de Docência",
       "mensagem": "E aí, pessoal! Estão preparados para o 1º Encontro Nacional de Docência? Eu estou ficando cada vez mais animado! Acabei de ver o cronograma e quero compartilhar com vocês. A palestra da Dra. Sarah Carime Braga Santana sobre Educação para a Diversidade no dia 24 já está me fazendo refletir sobre como podemos incluir mais diversidade nas nossas práticas de ensino. E vocês, o que estão achando do tema? Quais são as expectativas de vocês para o encontro?",
       "horario": "2025-06-05T14:27:04.159Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, turma! Tudo certo com os estudos em \"1º Encontro Nacional de Docência\"? Qualquer dúvida, mandem aqui!",
+      "horario": "2025-06-06T13:55:00.892Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "Pessoal, passando para lembrar de dar uma olhada no material do curso \"1º Encontro Nacional de Docência\". Bons estudos!",
+      "horario": "2025-06-06T13:59:00.536Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "Só para dar um alô e desejar foco total nos estudos do curso \"1º Encontro Nacional de Docência\"!",
+      "horario": "2025-06-06T14:00:00.794Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, pessoal! Estou dando uma olhada no material do curso e me deparei com as palestras que vão acontecer nos próximos dias. Achei muito interessante a palestra da Dra. Sarah Carime Braga Santana sobre \"Educação para a Diversidade: Práticas, Saberes e Compromisso\". É um tema tão importante e atual, não é mesmo?\n\nAlguém já pensou em como podemos aplicar esses conceitos em nossas práticas docentes? Eu estou começando a refletir sobre como posso trabalhar a diversidade em minha sala de aula. Quais são as experiências de vocês?",
+      "horario": "2025-06-06T14:12:01.807Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, pessoal! Estão preparados para o 1º Encontro Nacional de Docência? Eu estou ficando cada vez mais animado! Acabei de dar uma olhada no material e achei muito interessante a palestra da Dra. Sarah Carime Braga Santana sobre Educação para a Diversidade. É um tema tão importante e atual, não é mesmo? Gostaria de saber o que vocês acham sobre a abordagem da diversidade nas escolas. Alguém tem alguma experiência ou reflexão para compartilhar?",
+      "horario": "2025-06-06T14:15:00.987Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, pessoal! Estão preparados para o 1º Encontro Nacional de Docência? Eu estou ficando cada vez mais animado! Acabei de dar uma olhada no material e achei super interessante a palestra da Dra. Sarah Carime Braga Santana sobre \"Educação para a Diversidade\". É um tema tão importante e atual, não é mesmo? Gostaria de saber o que vocês acham sobre a abordagem da diversidade nas escolas. Alguém tem alguma experiência ou ideia para compartilhar?",
+      "horario": "2025-06-06T19:00:01.755Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, pessoal! Estou dando uma olhada no material do nosso curso e me chamou a atenção a palestra da Dra. Layane Rodrigues de Lima sobre o ensino da língua portuguesa como L2 na educação básica. Achei muito interessante a ideia de valorizar as línguas e culturas como ponto de partida para o ensino. Alguém já teve alguma experiência com ensino de línguas para alunos que não falam português como primeira língua? Querem compartilhar? \n\nE não esqueçam que a programação é intensa esses dias, vamos nos preparando para os encontros!",
+      "horario": "2025-06-06T19:30:01.327Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, pessoal! Queria compartilhar uma coisa que me chamou a atenção no material do curso. A palestra da Dra. Sarah Carime Braga Santana sobre \"Educação para a Diversidade\" parece muito interessante. Acho que é um tema tão importante e atual, não é mesmo? Gostaria de saber o que vocês acham sobre a relação entre educação e diversidade. Alguém já teve alguma experiência nesse sentido? \n\nE só um lembrete: o primeiro encontro já é dia 24! Estamos quase lá.",
+      "horario": "2025-06-06T20:00:01.750Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, pessoal! Estou dando uma olhada no conteúdo do nosso curso e me chamou a atenção a palestra da Dra. Sarah Carime Braga Santana sobre \"Educação para a Diversidade\". É tão importante refletir sobre as múltiplas dimensões que englobam esse tema, não é mesmo? Quero saber de vocês, o que estão achando do conteúdo até agora? Estão conseguindo relacionar com a prática de vocês?",
+      "horario": "2025-06-06T20:30:01.424Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, pessoal! Estão preparados para o nosso 1º Encontro Nacional de Docência? Olhei o cronograma e estou muito animado com as palestras! A Dra. Sarah Carime Braga Santana vai falar sobre Educação para a Diversidade, um tema tão importante hoje em dia. E você, o que achou do conteúdo até agora? Alguma palestra ou tema que te chamou mais a atenção? Lembre-se de que o encontro começa dia 24, às 19h30! Não percam!",
+      "horario": "2025-06-09T16:19:01.754Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, pessoal! Estão se preparando para o 1º Encontro Nacional de Docência? Eu estou ficando cada vez mais animado com a programação! A palestra da Dra. Sarah Carime Braga Santana sobre \"Educação para a Diversidade\" me chamou特别 atenção. É tão importante discutir sobre inclusão e diversidade na educação, não é mesmo? \n\nAlguém já tinha conhecimento sobre algum dos palestrantes ou temas que serão abordados? Eu estou ansioso para conhecer mais sobre esses assuntos e trocar ideias com vocês! \n\nLembrando que o primeiro dia é dia 24, às 19h30. Não percam!",
+      "horario": "2025-06-09T16:42:01.624Z"
+    },
+    {
+      "nomeGrupo": "1º Encontro Nacional de Docência",
+      "mensagem": "E aí, pessoal! Estou dando uma olhada no material do curso e me deparei com as palestras que vão acontecer nos próximos dias. Achei muito interessante a palestra da Dra. Sarah Carime Braga Santana sobre \"Educação para a Diversidade: Práticas, Saberes e Compromisso\". É um tema tão relevante hoje em dia, não é mesmo? Gostaria de saber o que vocês acham sobre a importância de abordar a diversidade nas escolas. Alguém tem alguma experiência ou insight para compartilhar? \n\nE só um lembrete: não esqueçam de confirmar presença para as palestras. \n\nUm abraço!",
+      "horario": "2025-06-11T11:12:01.021Z"
     }
   ],
   "120363340455449300@g.us": [
