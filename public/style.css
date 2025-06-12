@@ -1,98 +1,162 @@
+/* public/style.css (versão moderna inspirada no ChatGPT) */
+
+/* 1. Variáveis de Cor para facilitar futuras customizações */
+:root {
+  --cor-fundo-principal: #212529; /* Um cinza bem escuro, quase preto */
+  --cor-fundo-card: #2c3034;     /* Um cinza um pouco mais claro para os cards */
+  --cor-texto-principal: #f8f9fa; /* Branco/cinza claro para textos */
+  --cor-texto-secundario: #adb5bd;/* Cinza para textos de menor importância */
+  --cor-borda: #495057;           /* Cinza para bordas sutis */
+  --cor-destaque: #0dcaf0;         /* Ciano/Azul claro para destaque */
+}
+
+/* 2. Estilos Globais e Dark Mode */
 body {
-  background-color: #f8f9fa;
-  color: #333;
+  background-color: var(--cor-fundo-principal);
+  color: var(--cor-texto-principal);
   font-family: 'Segoe UI', Roboto, sans-serif;
 }
 
-h1 {
-  font-weight: bold;
-  color: #007bff;
+/* Melhorando a barra de rolagem para o tema escuro */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--cor-fundo-principal);
+}
+::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #777;
 }
 
+/* 3. Estilizando os "Cards" que contêm as seções */
+.card-dark {
+  background-color: var(--cor-fundo-card);
+  border: 1px solid var(--cor-borda);
+  border-radius: 0.75rem; /* Bordas mais arredondadas */
+  padding: 1.5rem;
+}
+
+h1, h4 {
+  color: var(--cor-texto-principal);
+  font-weight: 600;
+}
+
+/* 4. Estilizando Componentes Específicos */
+
+/* Logs */
 #logs {
-  background-color: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  height: 200px;
+  background-color: var(--cor-fundo-principal); /* Fundo ainda mais escuro para contraste */
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 0.9em;
+  color: var(--cor-texto-secundario);
+  border-color: var(--cor-borda);
   overflow-y: auto;
-  font-family: monospace;
-  font-size: 14px;
 }
-
-#logs div {
-  margin-bottom: 2px;
-}
-
-#logs div::before {
-  content: '';
-}
-
-#logs span.timestamp {
+#logs .timestamp {
   color: #888;
-  margin-right: 6px;
 }
 
-table {
-  background-color: #fff;
+/* Tabelas */
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--cor-borda);
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
+  --bs-table-color: var(--cor-texto-principal);
+}
+.table thead th {
+  background-color: var(--cor-fundo-principal) !important;
+  color: var(--cor-texto-principal) !important;
+  border-bottom: 2px solid var(--cor-destaque);
+  transition: 0.3s ease-in-out;
 }
 
-th {
-  background-color: #343a40 !important;
-  color: white !important;
+.table-hover>tbody>tr>td {
+  transition: background 0.5s ease, color 0.8s ease-in-out;
 }
 
-td, th {
-  vertical-align: middle;
+.table-hover>tbody>tr:hover>* {
+  background: var(--cor-fundo-principal);
+  color: var(--cor-destaque);
+  cursor: default;
 }
 
-table tr:hover {
-  background-color: #f1f1f1;
+/* Gráfico */
+#chart {
+  background-color: transparent;
 }
 
-#qrcode img {
-  max-width: 100%;
-  height: auto;
+.chart-container {
+  position: relative; 
+  height: 100%; 
+  width: 100%;
 }
 
-button {
-  border-radius: 8px !important;
+/* Botões */
+.btn {
+  border-radius: 0.5rem !important;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+}
+.btn-outline-primary {
+  border-color: var(--cor-destaque);
+  color: var(--cor-destaque);
+}
+.btn-outline-primary:hover {
+  background-color: var(--cor-destaque);
+  color: var(--cor-fundo-principal);
 }
 
-canvas {
-  background-color: #fff;
-  border-radius: 8px;
-  padding: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+/* Inputs e Abas (Tabs) */
+.input-group-text {
+  background-color: var(--cor-fundo-card);
+  border-color: var(--cor-borda);
+  color: var(--cor-texto-secundario);
+}
+.form-control {
+  background-color: var(--cor-fundo-principal);
+  border-color: var(--cor-borda);
+  color: var(--cor-texto-principal);
+}
+.form-control:focus {
+  background-color: var(--cor-fundo-principal);
+  color: var(--cor-texto-principal);
+  border-color: var(--cor-destaque);
+  box-shadow: 0 0 0 0.25rem rgba(13, 202, 240, 0.25);
+}
+.nav-tabs .nav-link {
+  color: var(--cor-texto-secundario);
+  border-color: transparent;
+  border-bottom: 3px solid transparent;
+}
+.nav-tabs .nav-link:hover {
+  border-color: transparent;
+  border-bottom: 3px solid var(--cor-borda);
+}
+.nav-tabs .nav-link.active {
+  color: var(--cor-destaque);
+  background-color: transparent;
+  border-color: transparent;
+  border-bottom: 3px solid var(--cor-destaque);
 }
 
-input#intervalo {
-  width: 80px;
+/* Modais */
+.modal-content {
+  background-color: var(--cor-fundo-card);
+  border: 1px solid var(--cor-borda);
+}
+.modal-header, .modal-footer {
+  border-color: var(--cor-borda);
+}
+.btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
 }
 
-.input-group span {
-  background-color: #343a40;
-  color: white;
-  border-radius: 8px 0 0 8px;
-}
-
-.input-group input {
-  min-width: 100px;
-}
-
-
-@media (max-width: 768px) {
-  .divAgendamento {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .input-group {
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  input#intervalo {
-    width: 100%;
-  }
+/* Health Section */
+.text-muted {
+    --bs-text-opacity: 1;
+    color: var(--cor-texto-secundario) !important;
 }

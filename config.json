@@ -1,5 +1,5 @@
 {
-  "intervaloMinutos": 1,
+  "intervaloMinutos": 3,
   "habilitado": false,
-  "delayEnvioMs": 15000
+  "delayEnvioMs": 25000
 }

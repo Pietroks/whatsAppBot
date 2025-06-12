@@ -7,29 +7,25 @@ const fs = require('fs').promises;
 // Ela recebe as dependências (funções e variáveis) do arquivo principal.
 function createApiRouter(dependencies) {
     const {
-        logDashboard,
-        logTerminal,
-        clientAtivo,
-        sincronizarGrupos,
-        iniciarAgendamento,
-        pararAgendamento,
-        restartClient,
-        salvarJSONSeDiferente,
-        carregarConfig,
-        salvarConfig,
-        delay,
-        gerarMensagemIA,
-        path,
-        gruposSyncPath,
-        gruposNaoSyncPath,
-        mensagensEnviadasPath,
-        configPath,
-        state: { gruposValidos, clientEmDesconexao }
-    } = dependencies;
+       logDashboard, logTerminal, clientAtivo, sincronizarGrupos, iniciarAgendamento, pararAgendamento,
+        initializeClient, destroyClient, 
+        salvarJSONSeDiferente, carregarConfig, salvarConfig, delay, gerarMensagemIA,
+        path, fs,
+        gruposSyncPath, gruposNaoSyncPath, mensagensEnviadasPath, configPath,
+        state
+    } = dependencies;   
 
     const router = express.Router();
 
     // --- ROTAS DO DASHBOARD ---
+    router.post('/conectar', (req, res) => {
+        try {
+            initializeClient();
+            res.json({ message: 'Comando de conexão recebido. Aguardando QR Code...' });
+        } catch(e) {
+            res.status(500).json({ error: 'Falha ao iniciar cliente.' });
+        }
+    });
 
     router.post('/sincronizar-grupo', async (req, res) => {
         const { id, name } = req.body;
@@ -52,7 +48,7 @@ function createApiRouter(dependencies) {
             await salvarJSONSeDiferente(gruposNaoSyncPath, novosNaoSync);
     
             dependencies.state.gruposValidos = gruposSync.map(g => g); // Atualiza a variável de estado
-            logDashboard(`✅ Grupo "${name}" sincronizado manualmente via dashboard.`);
+            logDashboard(`✅ Grupo "${name}" sincronizado`);
             
             await sincronizarGrupos();
     
@@ -90,7 +86,7 @@ function createApiRouter(dependencies) {
             await salvarJSONSeDiferente(gruposNaoSyncPath, gruposNaoSync);
     
             dependencies.state.gruposValidos = novosGruposSync.map(g => g); // Atualiza a variável de estado
-            logDashboard(`➖ Grupo "${name}" foi desincronizado via dashboard.`);
+            logDashboard(`➖ Grupo "${name}" foi desincronizado`);
             logDashboard(`✅ ${novosGruposSync.length} grupos válidos e configurados para envio.`);
             res.json({ ok: true });
         } catch (err) {
@@ -168,7 +164,7 @@ function createApiRouter(dependencies) {
         config.habilitado = true;
         await salvarConfig(config);
         await iniciarAgendamento();
-        logTerminal('▶️ Agendamento iniciado via dashboard.');
+        logTerminal('▶️ Agendamento iniciado');
         res.json({ ok: true });
     });
 
@@ -177,7 +173,7 @@ function createApiRouter(dependencies) {
         config.habilitado = false;
         await salvarConfig(config);
         await pararAgendamento();
-        logTerminal('⏹️ Agendamento parado via dashboard.');
+        logTerminal('⏹️ Agendamento parado');
         res.json({ ok: true });
     });
 
@@ -206,20 +202,14 @@ function createApiRouter(dependencies) {
     router.post('/desconectar', async (req, res) => {
         if (!clientAtivo()) {
             logDashboard('⚠️ Cliente não está pronto para desconectar.');
-            return res.status(400).json({ error: 'cliente nao esta pronto.' });
+            return res.status(400).json({ error: 'cliente nao esta conectado.' });
         }
         try {
-            logDashboard('🔌 Bot desconectado via dashboard.');
-            dependencies.state.clientEmDesconexao = true;
+            logDashboard('🔌 Bot desconectado');
             await pararAgendamento();
-            await dependencies.client.logout();
-            await delay(1000);
-            await dependencies.client.destroy();
-            await restartClient();
-            dependencies.state.clientEmDesconexao = false;
+            await destroyClient();
             res.json({ ok: true });
         } catch (err) {
-            dependencies.state.clientEmDesconexao = false;
             logDashboard('❌ Erro ao desconectar: ' + err.message);
             res.status(500).json({ error: err.message });
         }

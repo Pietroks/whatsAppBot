@@ -51,6 +51,7 @@ const configPath = path.join(__dirname, 'config.json');
 // --- Variáveis de Estado ---
 let client;
 let agendamento;
+let logHistory = [];
 let state = {
     gruposValidos: [],
     clientEmDesconexao: false,
@@ -62,11 +63,9 @@ let state = {
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'views')));
-
 axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
 
 // --- Funções Principais do Bot ---
-
 function clientAtivo() {
     return client && client.info && client.info.wid;
 }
@@ -77,21 +76,34 @@ function removerDuplicados(grupos) {
     return Array.from(mapa.values());
 }
 
-async function restartClient() {
-    state.isQrCodeVisible = false;
-
-    try {
-        if (client) {
-            await client.destroy();
-            logDashboard('🗑️ Cliente WhatsApp destruído.');
-        }
-    } catch (err) {
-        console.error('Erro ao destruir o client:', err.message);
+function initializeClient() {
+    if (client) {
+        return logDashboard('⚠️ Tentativa de inicializar um cliente que já existe ou está em processo.');
     }
 
+    logDashboard('🚀 Inicializando cliente WhatsApp...');
     client = new Client(clientConfig);
     configurarEventosClient();
-    client.initialize();
+    client.initialize().catch(err => {
+        logDashboard(`❌ Erro fatal durante a inicialização do cliente: ${err.message}`);
+        client = null;
+    });
+}
+
+async function destroyClient() {
+    if (!client) return;
+    try {
+        state.clientEmDesconexao = true;
+        await client.destroy();
+        logDashboard('🗑️ Cliente WhatsApp destruído.');
+    } catch (err) {
+        logTerminal(`❌ Erro ao destruir o cliente: ${err.message}`);
+    } finally {
+        client = null;
+        state.clientEmDesconexao = false;
+        state.isQrCodeVisible = false;
+        io.emit('status', 'desconhecido');
+    }
 }
 
 function configurarEventosClient() {
@@ -140,8 +152,16 @@ function configurarEventosClient() {
 }
 
 function logDashboard(msg) {
-    console.log(msg);
-    io.emit('log', msg);
+    const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const logCompleto = { hora, msg };
+
+    logHistory.push(logCompleto);
+    if (logHistory.length > 50) {
+        logHistory = logHistory.slice(-50);
+    }
+
+    console.log(`[${hora}] ➤ ${msg}`);
+    io.emit('log', logCompleto);
 }
 
 function logTerminal(msg) {
@@ -348,11 +368,12 @@ async function salvarConfig(config) {
 
 // --- 📡 CONFIGURAÇAO DAS ROTAS do Dashboard ---
 const dependencies = {
-    logDashboard, logTerminal, clientAtivo, sincronizarGrupos, iniciarAgendamento, pararAgendamento, restartClient,
+    logDashboard, logTerminal, clientAtivo, sincronizarGrupos, iniciarAgendamento, pararAgendamento,
+    initializeClient, destroyClient, 
     salvarJSONSeDiferente, carregarConfig, salvarConfig, delay, gerarMensagemIA,
     path, fs,
     gruposSyncPath, gruposNaoSyncPath, mensagensEnviadasPath, configPath,
-    get client() { return client }, 
+    get client() { return client; },
     state
 };
 
@@ -367,7 +388,16 @@ app.get('/', (req, res) => {
 
 // --- Inicialização do Servidor ---
 server.listen(PORT, () => {
-    logDashboard(`🔧 Dashboard e API disponíveis em: http://localhost:${PORT}`);
-});
+    logTerminal(`🔧 Dashboard e API disponíveis em: http://localhost:${PORT}`);
 
-restartClient();
+    io.on('connection', (socket) => {
+        logTerminal('Um usuário se conectou ao dashboard via Socket.IO');
+
+        socket.emit('log_history', logHistory);
+
+        socket.on('qr_scan_aborted', () => {
+            logDashboard('🚫 Escaneamento de QR Code cancelado pelo usuário.');
+            destroyClient();
+        });
+    });
+});

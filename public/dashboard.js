@@ -1,10 +1,16 @@
 const API_BOT = window.location.origin;
 const socket = io();
-const modalQr = new bootstrap.Modal(document.getElementById('modalQr'));
+
+const modalQrElement = document.getElementById('modalQr');
+const modalQr = new bootstrap.Modal(modalQrElement);
+const qrScanAbortedListener = () => {
+    socket.emit('qr_scan_aborted'); 
+}
+
 const modalTeste = new bootstrap.Modal(document.getElementById('modalTeste'));
+const modalConfirm = new bootstrap.Modal(document.getElementById('modalConfirm'));
 const botaoAcao = document.getElementById('botao-acao');
 
-// ... (funções de controle, sockets e histórico permanecem as mesmas)
 async function showToast(message, type = 'info') {
     const toastContainer = document.querySelector('.toast-container');
     if (!toastContainer) return;
@@ -78,6 +84,8 @@ async function verificarStatus() {
     try {
         const res = await fetch(`${API_BOT}/api/status`);
         const { status } = await res.json();
+        botaoAcao.disabled = false;
+
         if (status === 'conectado') {
             botaoAcao.textContent = '🔌 Desconectar WhatsApp';
             botaoAcao.className = 'btn btn-outline-danger';
@@ -85,13 +93,29 @@ async function verificarStatus() {
         } else {
             botaoAcao.textContent = '🔑 Conectar WhatsApp';
             botaoAcao.className = 'btn btn-outline-success';
-            botaoAcao.onclick = abrirQrCode;
+            botaoAcao.onclick = conectarBot;
         }
     } catch {
+        botaoAcao.disabled = false;
         botaoAcao.textContent = '❌ Bot offline';
         botaoAcao.className = 'btn btn-outline-secondary';
         botaoAcao.onclick = () => showToast('❌ Servidor não disponível', 'danger');
     }
+}
+
+async function conectarBot() {
+    showToast('🚀 Enviando comando para conectar...', 'info');
+    botaoAcao.textContent = '🔄 Aguardando QR Code...';
+    botaoAcao.disabled = true;
+    await fetch(`${API_BOT}/api/conectar`, { method: 'POST' });
+}
+
+async function desconectarBot() {
+    if (!await showConfirm('Deseja mesmo desconectar do WhatsApp?')) return;
+    const res = await fetch(`${API_BOT}/api/desconectar`, { method: 'POST' });
+    if (res.ok) { showToast('🔌 Desconectado do WhatsApp!', 'info');
+    } else { showToast('❌ Erro ao desconectar.', 'danger'); }
+    await verificarStatus();
 }
 
 async function carregarConfig() {
@@ -120,29 +144,36 @@ async function atualizarConfig() {
 
 function abrirQrCode() { modalQr.show(); }
 
-async function desconectarBot() {
-    if (!await showConfirm('Deseja mesmo desconectar do WhatsApp?')) return;
-    const res = await fetch(`${API_BOT}/api/desconectar`, { method: 'POST' });
-    if (res.ok) showToast('🔌 Desconectado do WhatsApp!', 'info');
-    else showToast('❌ Erro ao desconectar.', 'danger');
-    verificarStatus();
-}
-
 function acaoBot() {}
 
-socket.on('log', msg => {
+socket.on('log_history', (history) => {
     const logs = document.getElementById('logs');
-    const hora = new Date().toLocaleTimeString('pt-BR', { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    logs.innerHTML += `<div><span class="timestamp">[${hora}]</span> ➤ ${msg}</div>`;
+    logs.innerHTML = '';
+    history.forEach(logEntry => {
+        logs.innerHTML += `<div><span class="timestamp">[${logEntry.hora}]</span> ➤ ${logEntry.msg}</div>`;
+    });
     logs.scrollTop = logs.scrollHeight;
 });
+socket.on('log', (logEntry) => {
+    const logs = document.getElementById('logs');
+    logs.innerHTML += `<div><span class="timestamp">[${logEntry.hora}]</span> ➤ ${logEntry.msg}</div>`;
+    logs.scrollTop = logs.scrollHeight;
+});
+
+
 socket.on('qr', qrData => {
     document.getElementById('qrcode').innerHTML = `<img src="${qrData}" alt="QR Code" class="img-fluid">`;
     modalQr.show();
+    modalQrElement.addEventListener('hidden.bs.modal', qrScanAbortedListener, { once: true });
 });
+
+
 socket.on('status', status => {
     verificarStatus();
-    if (status === 'conectado') modalQr.hide();
+    if (status === 'conectado') {
+        modalQrElement.removeEventListener('hidden.bs.modal', qrScanAbortedListener);
+        modalQr.hide();
+    };
 });
 
 async function carregarMensagens(pagina = 1) {
@@ -235,7 +266,13 @@ function desenharGrafico(contagem) {
                 backgroundColor: 'rgba(54, 162, 235, 0.7)'
             }]
         },
-        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
     });
 }
 
@@ -339,6 +376,43 @@ async function testarMensagem(id, name) {
     }
 }
 
+async function carregarHealthStatus() {
+    try {
+        const res = await fetch('/api/health');
+        if (!res.ok) {
+            atualizarStatusCheck('whatsapp', 'error', 'APIde health indisponivel');
+            atualizarStatusCheck('ai_api', 'error', 'API de health indisponível');
+            atualizarStatusCheck('filesystem', 'error', 'API de health indisponível');
+            return;
+        }
+
+        const healthData = await res.json();
+        for (const checkName in healthData.checks) {
+            const check = healthData.checks[checkName];
+            atualizarStatusCheck(checkName, check.status, check.message);
+        }
+    } catch (error) {
+        console.error('Falha ao carregar status de saúde:', error);
+        showToast('Falha ao carregar status de saúde:', 'danger');
+    }
+}
+
+function atualizarStatusCheck(checkName, status, message) {
+    const statusBadge = document.getElementById(`health-${checkName}-status`);
+    const messageText = document.getElementById(`health-${checkName}-message`);
+
+    if (statusBadge && messageText) {
+        messageText.textContent = message;
+        if (status === 'ok') {
+            statusBadge.textContent = 'OK';
+            statusBadge.className = 'badge rounded-pill bg-success';
+        } else {
+            statusBadge.textContent = 'ERRO';
+            statusBadge.className = 'badge rounded-pill bg-danger';
+        }
+    }
+} 
+
 // Lógica para salvar a aba ativa
 document.querySelectorAll('#tabs a').forEach(tab => {
     tab.addEventListener('shown.bs.tab', e => localStorage.setItem('activeTab', e.target.getAttribute('href')));
@@ -356,4 +430,8 @@ carregarMensagens();
 carregarDadosGraficos();
 carregarGruposSync();
 carregarGruposNaoSync();
-setInterval(verificarStatus, 15000);
+carregarHealthStatus();
+setInterval(() => {
+    verificarStatus();
+    carregarHealthStatus();
+}, 10000);
