@@ -37,12 +37,24 @@
       </ul>
       <div class="card card-dark p-3">
         <div class="d-flex gap-2 flex-wrap justify-content-center">
-          <button class="btn btn-success" onclick="iniciarBot()">▶️ Iniciar</button>
-          <button class="btn btn-danger" onclick="pararBot()">⏹️ Parar</button>
+          <button class="btn btn-success" onclick="iniciarBot()" id="btn-iniciar"><svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+  <path fill-rule="evenodd" d="M8.6 5.2A1 1 0 0 0 7 6v12a1 1 0 0 0 1.6.8l8-6a1 1 0 0 0 0-1.6l-8-6Z" clip-rule="evenodd"/>
+</svg>
+ Iniciar</button>
+          <button class="btn btn-danger" onclick="pararBot()"><svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+  <path d="M7 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H7Z"/>
+</svg>
+ Parar</button>
           <div class="input-group w-auto"><span class="input-group-text">⏱️</span><input type="number" id="intervalo" class="form-control" placeholder="Intervalo (min)"></div>
           <div class="input-group w-auto"><span class="input-group-text">🐢</span><input type="number" id="delay" class="form-control" placeholder="Delay (ms)"></div>
-          <button class="btn btn-warning" onclick="atualizarConfig()">💾 Salvar</button>
-          <button id="botao-acao" class="btn btn-outline-primary" onclick="acaoBot()">🔄 Verificando...</button>
+          <button class="btn btn-warning" onclick="atualizarConfig()"><svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+  <path fill-rule="evenodd" d="M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7.414A2 2 0 0 0 20.414 6L18 3.586A2 2 0 0 0 16.586 3H5Zm10 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM8 7V5h8v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
+</svg>
+ Salvar</button>
+          <button id="botao-acao" class="btn btn-outline-primary" onclick="acaoBot()"><svg class="w-[30px] h-[30px] text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
+</svg>
+ Verificando...</button>
         </div>
       </div>
     </header>
@@ -62,7 +74,10 @@
         <div class="col-12 col-lg-9 mb-4">
           <div class="card card-dark h-100">
             <div class="d-flex justify-content-between align-items-center mb-3">
-              <h4 class="m-0">📊 Histórico de Mensagens</h4>
+              <h4 class="m-0"><svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15v4m6-6v6m6-4v4m6-6v6M3 11l6-5 6 5 5.5-5.5"/>
+</svg>
+ Histórico de Mensagens</h4>
             </div>
             <div class="chart-container">
                 <canvas id="chart"></canvas>
@@ -74,7 +89,10 @@
         <div class="card card-dark h-100">
           <div class="d-flex justify-content-between align-items-center mb-3">
               <h4 class="m-0">⚙️ Status do Sistema</h4>
-              <button class="btn btn-outline-primary btn-sm" onclick="carregarHealthStatus()">🔄</button>
+              <button class="btn btn-outline-primary btn-sm" onclick="carregarHealthStatus()"><svg class="w-[30px] h-[30px] text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
+</svg>
+</button>
           </div>
           <ul class="list-group list-group-flush">
             <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-white">
@@ -105,7 +123,10 @@
   </div> <div class="card card-dark">
       <div class="d-flex justify-content-between align-items-center mb-3">
           <h4 class="m-0">📜 Tabela de Histórico</h4>
-          <button class="btn btn-outline-primary btn-sm" onclick="carregarMensagens()">🔄</button>
+          <button class="btn btn-outline-primary btn-sm" onclick="carregarMensagens()"><svg class="w-[30px] h-[30px] text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
+</svg>
+</button>
       </div>
       <table class="table table-hover">
         <thead class="table-dark"><tr><th>Grupo</th><th>Mensagem</th><th>Data/Hora</th></tr></thead>
@@ -123,7 +144,10 @@
           <div class="col-md-6 mb-4 mb-md-0">
             <div class="card card-dark h-100">
               <h4 class="mb-3">✅ Grupos Sincronizados</h4>
-              <button class="btn btn-outline-primary btn-sm mb-2" onclick="carregarGruposSync()">🔄 Atualizar</button>
+              <button class="btn btn-outline-primary btn-sm mb-2" onclick="carregarGruposSync()"><svg class="w-[30px] h-[30px] text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
+</svg>
+ Atualizar</button>
               <table class="table table-hover">
                 <thead class="table-dark"><tr><th>Nome do Grupo</th><th class="text-end">Ações</th></tr></thead>
                 <tbody id="tabela-grupos-sync"></tbody>
@@ -133,7 +157,10 @@
           <div class="col-md-6">
             <div class="card card-dark h-100">
               <h4 class="mb-3">🔗 Grupos Não Sincronizados</h4>
-              <button class="btn btn-outline-primary btn-sm mb-2" onclick="carregarGruposNaoSync()">🔄 Atualizar</button>
+              <button class="btn btn-outline-primary btn-sm mb-2" onclick="carregarGruposNaoSync()"><svg class="w-[30px] h-[30px] text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
+</svg>
+ Atualizar</button>
               <table class="table table-hover">
                 <thead class="table-dark"><tr><th>Nome do Grupo</th><th class="text-end">Ação</th></tr></thead>
                 <tbody id="tabela-grupos-nao-sync"></tbody>

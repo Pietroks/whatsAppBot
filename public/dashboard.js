@@ -1,5 +1,6 @@
 const API_BOT = window.location.origin;
 const socket = io();
+let syncGroupCount = 0;
 
 const modalQrElement = document.getElementById('modalQr');
 const modalQr = new bootstrap.Modal(modalQrElement);
@@ -280,9 +281,23 @@ async function iniciarBot() {
     await fetch(`${API_BOT}/api/iniciar`, { method: 'POST' });
     showToast('✅ Bot iniciado', 'success');
 }
+
 async function pararBot() {
     await fetch(`${API_BOT}/api/parar`, { method: 'POST' });
     showToast('⏹️ Bot parado', 'info');
+}
+
+function atualizarControlesBot() {
+    const btnIniciar = document.getElementById('btn-iniciar');
+    if (btnIniciar) {
+        if (syncGroupCount > 0) {
+            btnIniciar.disabled = false;
+            btnIniciar.title = 'Iniciar o envio de mensagens';
+        } else {
+            btnIniciar.disabled = true;
+            btnIniciar.title = 'Sincronize pelo menos 1 grupo';
+        }
+    }
 }
 
 // --- LÓGICA DE GRUPOS ATUALIZADA ---
@@ -320,6 +335,7 @@ async function carregarGruposSync() {
                         </tr>`;
         tbody.insertAdjacentHTML('beforeend', linha);
     });
+    atualizarControlesBot();
 }
 
 async function desincronizarGrupo(id, name) {
@@ -406,7 +422,10 @@ function atualizarStatusCheck(checkName, status, message) {
         if (status === 'ok') {
             statusBadge.textContent = 'OK';
             statusBadge.className = 'badge rounded-pill bg-success';
-        } else {
+        } else if (status === 'warning') { 
+            statusBadge.textContent = 'AVISO';
+            statusBadge.className = 'badge rounded-pill bg-warning text-dark';
+        } else { 
             statusBadge.textContent = 'ERRO';
             statusBadge.className = 'badge rounded-pill bg-danger';
         }

@@ -160,12 +160,25 @@ function createApiRouter(dependencies) {
     });
 
     router.post('/iniciar', async (req, res) => {
-        const config = await carregarConfig();
-        config.habilitado = true;
-        await salvarConfig(config);
-        await iniciarAgendamento();
-        logTerminal('▶️ Agendamento iniciado');
-        res.json({ ok: true });
+        try {
+            const gruposSyncRaw = await fs.readFile(gruposSyncPath, 'utf-8').catch(() => '[]');
+            const gruposSync = JSON.parse(gruposSyncRaw);
+
+            if (gruposSync.length === 0) {
+                logDashboard('⚠️ Tentativa de iniciar o agendamento sem grupos sincronizados.');
+                return res.status(400).json({ error: 'Nenhum grupo sincronizado. Não é possível iniciar o agendamento.' });
+            }
+    
+            const config = await carregarConfig();
+            config.habilitado = true;
+            await salvarConfig(config);
+            await iniciarAgendamento();
+            logTerminal('▶️ Agendamento iniciado');
+            res.json({ ok: true });
+
+        } catch (err) {
+            res.status(500).json({ error: 'Falha ao iniciar o agendamento.' });
+        }
     });
 
     router.post('/parar', async (req, res) => {
@@ -234,25 +247,41 @@ function createApiRouter(dependencies) {
             timestamp: new Date().toISOString(),
             checks: {}
         };
-        let isCriticalError = false;
+        //  checagem do whatsapp
+        const isWhatsAppConnected = clientAtivo();
+        health.checks.whatsapp = {
+            status: isWhatsAppConnected ? 'ok' : 'warning',
+            message: isWhatsAppConnected ? 'conectado' : 'Aguardando conexão'
+        };
 
-        health.checks.whatsapp = { status: clientAtivo() ? 'ok' : 'error', message: clientAtivo() ? 'Conectado' : 'Desconectado do WhatsApp' };
-        if (!clientAtivo()) isCriticalError = true;
+        // checagem da api IA
+        const hasApiKey = !!process.env.OPENAI_API_KEY;
+        health.checks.ai_api = {
+            status: hasApiKey ? 'ok' : 'error',
+            message: hasApiKey ? 'Chave da API encontrada' : 'ERRO CRITICO'
+        };
 
-        const apiKey = process.env.OPENAI_API_KEY;
-        health.checks.ai_api = { status: apiKey ? 'ok' : 'error', message: apiKey ? 'Chave da API encontrada.' : 'Variável de ambiente OPENAI_API_KEY não configurada.' };
-        if (!apiKey) isCriticalError = true;
-
+        // checagem do sistema de arquivos
+        let canAccessFs = false;
         try {
             await fs.access(configPath);
-            health.checks.filesystem = { status: 'ok', message: 'Acesso ao arquivo config.json está funcional.' };
+            canAccessFs = true;
+            health.checks.filesystem = { status: 'ok', message: 'OK'};
         } catch (error) {
-            health.checks.filesystem = { status: 'error', message: 'Não foi possível acessar o arquivo de configuração (config.json).' };
-            isCriticalError = true;
+            health.checks.filesystem = { status: 'error', message: 'ERRO CRITICO: nao foi possivel acessar o arquivo config.json' };
         }
 
-        if (isCriticalError) health.status = 'error';
-        res.status(isCriticalError ? 503 : 200).json(health);
+        const checkStatus = Object.values(health.checks).map(check => check.status);
+
+        if (checkStatus.includes('error')) {
+            health.status = 'error';
+        } else if (checkStatus.includes('warning')) {
+            health.status = 'warning'
+        }
+
+        const hasCriticalError = !hasApiKey || !canAccessFs;
+
+        res.status(hasCriticalError ? 503 : 200).json(health);
     });
 
     router.get('/config', async (req, res) => {
