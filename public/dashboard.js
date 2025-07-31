@@ -329,36 +329,48 @@ async function carregarGruposSync() {
     const grupos = await res.json();
     const tbody = document.getElementById("tabela-grupos-sync");
 
-    // ATUALIZA A CONTAGEM GLOBAL DE GRUPOS
     syncGroupCount = grupos.length;
-
     tbody.innerHTML = "";
+
     if (grupos.length === 0) {
       tbody.innerHTML = `<tr><td colspan="2" class="text-center">Nenhum grupo sincronizado.</td></tr>`;
     } else {
       grupos.forEach((grupo) => {
-        const linha = `<tr>
-                                <td>${grupo.name}</td>
-                                <td class="text-end">
-                                    <button class="btn btn-sm btn-info me-1" onclick="testarMensagem('${grupo.id}', '${grupo.name.replace(
-          /'/g,
-          "\\'"
-        )}')">🧪 Testar</button>
-                                    <button class="btn btn-sm btn-danger" onclick="desincronizarGrupo('${grupo.id}', '${grupo.name.replace(
-          /'/g,
-          "\\'"
-        )}')">➖ Desincronizar</button>
-                                </td>
-                                </tr>`;
+        const escapedName = grupo.name.replace(/'/g, "\\'");
+        const linha = `
+                    <tr>
+                        <td>${grupo.name}</td>
+                        <td class="text-end">
+                            <input type="file" id="pdf-upload-${grupo.id}" class="d-none" accept=".pdf">
+
+                            <div class="btn-group" role="group" style="display: inline-flex; gap: 1rem;">
+                                <button class="btn btn-sm btn-primary" title="Enviar PDF" onclick="document.getElementById('pdf-upload-${grupo.id}').click()">
+                                    📤 PDF
+                                </button>
+                                <button class="btn btn-sm btn-info" title="Testar Mensagem" onclick="testarMensagem('${grupo.id}', '${escapedName}')">
+                                    🧪 Testar
+                                </button>
+                                <button class="btn btn-sm btn-danger" title="Desincronizar Grupo" onclick="desincronizarGrupo('${grupo.id}', '${escapedName}')">
+                                    ➖ Desincronizar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>`;
         tbody.insertAdjacentHTML("beforeend", linha);
+
+        // Adiciona o listener para o input de arquivo recém-criado
+        document.getElementById(`pdf-upload-${grupo.id}`).addEventListener("change", (event) => {
+          const file = event.target.files[0];
+          if (file) {
+            uploadPDF(grupo.id, grupo.name, file);
+          }
+        });
       });
     }
   } catch (error) {
     console.error("Falha ao carregar grupos sincronizados:", error);
-    syncGroupCount = 0; // Zera a contagem em caso de erro
+    syncGroupCount = 0;
   } finally {
-    // CHAMA A FUNÇÃO QUE HABILITA/DESABILITA O BOTÃO
-    // Esta chamada acontece independentemente de haver grupos ou não.
     atualizarControlesBot();
   }
 }
@@ -395,6 +407,39 @@ async function sincronizarGrupo(id, name) {
     carregarGruposNaoSync();
   } else {
     showToast(`❌ Erro ao sincronizar.`, "danger");
+  }
+}
+
+// FUNÇÃO PARA UPLOAD DE PDF
+async function uploadPDF(groupId, groupName, file) {
+  if (!(await showConfirm(`Enviar o arquivo "${file.name}" para o grupo "${groupName}"? O PDF antigo será substituído.`))) {
+    // Limpa o input se o usuário cancelar, para que ele possa selecionar o mesmo arquivo novamente
+    document.getElementById(`pdf-upload-${groupId}`).value = "";
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("pdfFile", file);
+
+  showToast(`Enviando PDF para "${groupName}"...`, "info");
+
+  try {
+    const res = await fetch(`/api/upload-pdf/${groupId}`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (res.ok) {
+      showToast(`✅ PDF para "${groupName}" foi enviado com sucesso!`, "success");
+    } else {
+      const errorData = await res.json();
+      showToast(`❌ Erro ao enviar PDF: ${errorData.error}`, "danger");
+    }
+  } catch (error) {
+    showToast(`❌ Erro de rede ao enviar o PDF.`, "danger");
+  } finally {
+    // Limpa o input após o envio
+    document.getElementById(`pdf-upload-${groupId}`).value = "";
   }
 }
 

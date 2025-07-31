@@ -1,20 +1,20 @@
-const { Client } = require('whatsapp-web.js');
-const qrcode = require('qrcode');
-const schedule = require('node-schedule');
-const axios = require('axios');
-const fs = require('fs').promises;
-const path = require('path');
-require('dotenv').config();
-const axiosRetry = require('axios-retry').default;
-const chalk = require('chalk');
-const gerarMensagemIA = require('./gerarMensagemIA');
-const createApiRouter = require('./routes/api.js');
+const { Client } = require("whatsapp-web.js");
+const qrcode = require("qrcode");
+const schedule = require("node-schedule");
+const axios = require("axios");
+const fs = require("fs").promises;
+const path = require("path");
+require("dotenv").config();
+const axiosRetry = require("axios-retry").default;
+const chalk = require("chalk");
+const gerarMensagemIA = require("./gerarMensagemIA");
+const createApiRouter = require("./routes/api.js");
 
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const bodyParser = require('body-parser');
-const { stat } = require('fs');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const bodyParser = require("body-parser");
+const { stat } = require("fs");
 
 const app = express();
 const server = http.createServer(app);
@@ -24,410 +24,427 @@ const PORT = process.env.PORT || 3001;
 
 // --- Configurações ---
 const clientConfig = {
-    puppeteer: {
-        headless: true,
-        // Se a correção de remover o puppeteer do package.json funcionou,
-        // você pode remover a linha 'executablePath' abaixo.
-        // executablePath: executablePath(),
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu'
-        ]
-    }
+  puppeteer: {
+    headless: true,
+    // Se a correção de remover o puppeteer do package.json funcionou,
+    // você pode remover a linha 'executablePath' abaixo.
+    // executablePath: executablePath(),
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--single-process",
+      "--disable-gpu",
+    ],
+  },
 };
 
 // --- Caminhos de Arquivos ---
-const gruposSyncPath = path.join(__dirname, 'gruposIDs', 'grupos_sincronizados.json');
-const gruposNaoSyncPath = path.join(__dirname, 'gruposIDs', 'grupos_nao_sincronizados.json');
-const mensagensEnviadasPath = path.join(__dirname, 'historico', 'mensagens_enviadas.json');
-const configPath = path.join(__dirname, 'config.json');
+const gruposSyncPath = path.join(__dirname, "gruposIDs", "grupos_sincronizados.json");
+const gruposNaoSyncPath = path.join(__dirname, "gruposIDs", "grupos_nao_sincronizados.json");
+const mensagensEnviadasPath = path.join(__dirname, "historico", "mensagens_enviadas.json");
+const configPath = path.join(__dirname, "config.json");
 
 // --- Variáveis de Estado ---
 let client;
 let agendamento;
 let logHistory = [];
 let state = {
-    gruposValidos: [],
-    clientEmDesconexao: false,
-    mensagensPreGeradas: new Map(),
-    isQrCodeVisible: false
+  gruposValidos: [],
+  clientEmDesconexao: false,
+  mensagensPreGeradas: new Map(),
+  isQrCodeVisible: false,
 };
 
 // --- Middlewares do Express ---
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.static(path.join(__dirname, 'views')));
+app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "views")));
 axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
 
 // --- Funções Principais do Bot ---
 function clientAtivo() {
-    return client && client.info && client.info.wid;
+  return client && client.info && client.info.wid;
 }
 
 function removerDuplicados(grupos) {
-    const mapa = new Map();
-    grupos.forEach(g => mapa.set(g.id, g));
-    return Array.from(mapa.values());
+  const mapa = new Map();
+  grupos.forEach((g) => mapa.set(g.id, g));
+  return Array.from(mapa.values());
 }
 
 function initializeClient() {
-    if (client) {
-        return logDashboard('⚠️ Tentativa de inicializar um cliente que já existe ou está em processo.');
-    }
+  if (client) {
+    return logDashboard("⚠️ Tentativa de inicializar um cliente que já existe ou está em processo.");
+  }
 
-    logDashboard('🚀 Inicializando cliente WhatsApp...');
-    client = new Client(clientConfig);
-    configurarEventosClient();
-    client.initialize().catch(err => {
-        logDashboard(`❌ Erro fatal durante a inicialização do cliente: ${err.message}`);
-        client = null;
-    });
+  logDashboard("🚀 Inicializando cliente WhatsApp...");
+  client = new Client(clientConfig);
+  configurarEventosClient();
+  client.initialize().catch((err) => {
+    logDashboard(`❌ Erro fatal durante a inicialização do cliente: ${err.message}`);
+    client = null;
+  });
 }
 
 async function destroyClient() {
-    if (!client) return;
-    try {
-        state.clientEmDesconexao = true;
-        await client.destroy();
-        logDashboard('🗑️ Cliente WhatsApp destruído.');
-    } catch (err) {
-        logTerminal(`❌ Erro ao destruir o cliente: ${err.message}`);
-    } finally {
-        client = null;
-        state.clientEmDesconexao = false;
-        state.isQrCodeVisible = false;
-        io.emit('status', 'desconhecido');
-    }
+  if (!client) return;
+  try {
+    state.clientEmDesconexao = true;
+    await client.destroy();
+    logDashboard("🗑️ Cliente WhatsApp destruído.");
+  } catch (err) {
+    logTerminal(`❌ Erro ao destruir o cliente: ${err.message}`);
+  } finally {
+    client = null;
+    state.clientEmDesconexao = false;
+    state.isQrCodeVisible = false;
+    io.emit("status", "desconhecido");
+  }
 }
 
 function configurarEventosClient() {
-    client.on('qr', async qr => {
-        try {
-            const qrImage = await qrcode.toDataURL(qr);
-            io.emit('qr', qrImage);
+  client.on("qr", async (qr) => {
+    try {
+      const qrImage = await qrcode.toDataURL(qr);
+      io.emit("qr", qrImage);
 
-            if (!state.isQrCodeVisible) {
-                logDashboard('📲 QR Code gerado! Escaneie para conectar...');
-                state.isQrCodeVisible = true;
-            } else {
-                logTerminal('ℹ️ Imagem do QR Code foi atualizada no dashboard.');
-            } 
-        } catch (err) {
-            logDashboard('❌ Erro ao gerar/atualizar QR Code: ' + err.message);
-        }
-    });
+      if (!state.isQrCodeVisible) {
+        logDashboard("📲 QR Code gerado! Escaneie para conectar...");
+        state.isQrCodeVisible = true;
+      } else {
+        logTerminal("ℹ️ Imagem do QR Code foi atualizada no dashboard.");
+      }
+    } catch (err) {
+      logDashboard("❌ Erro ao gerar/atualizar QR Code: " + err.message);
+    }
+  });
 
-    client.on('ready', async () => {
-        logDashboard('✅ Bot conectado com sucesso!');
-        state.isQrCodeVisible = false;
+  client.on("ready", async () => {
+    logDashboard("✅ Bot conectado com sucesso!");
+    state.isQrCodeVisible = false;
 
-        io.emit('status', 'conectado');
-        try {
-            logDashboard('🔄 Sincronizando grupos...');
-            await sincronizarGrupos();
-            const config = await carregarConfig();
-            if (config.habilitado) await iniciarAgendamento();
-        } catch (error) {
-            logDashboard(`❌ Erro crítico durante a inicialização pós-ready: ${error.message}`);
-        }
-    });
+    io.emit("status", "conectado");
+    try {
+      logDashboard("🔄 Sincronizando grupos...");
+      await sincronizarGrupos();
+      const config = await carregarConfig();
+      if (config.habilitado) await iniciarAgendamento();
+    } catch (error) {
+      logDashboard(`❌ Erro crítico durante a inicialização pós-ready: ${error.message}`);
+    }
+  });
 
-    client.on('disconnected', reason => {
-        logDashboard(`🔌 Desconectado: ${reason}`);
-        state.isQrCodeVisible = false;
+  client.on("disconnected", (reason) => {
+    logDashboard(`🔌 Desconectado: ${reason}`);
+    state.isQrCodeVisible = false;
 
-        io.emit('status', 'desconectado');
-    });
+    io.emit("status", "desconectado");
+  });
 
-    client.on('auth_failure', msg => {
-        logDashboard(`❌ Falha de autenticação: ${msg}`);
-        io.emit('status', 'desconectado');
-    });
+  client.on("auth_failure", (msg) => {
+    logDashboard(`❌ Falha de autenticação: ${msg}`);
+    io.emit("status", "desconectado");
+  });
 }
 
 function logDashboard(msg) {
-    const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const logCompleto = { hora, msg };
+  const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const logCompleto = { hora, msg };
 
-    logHistory.push(logCompleto);
-    if (logHistory.length > 50) {
-        logHistory = logHistory.slice(-50);
-    }
+  logHistory.push(logCompleto);
+  if (logHistory.length > 50) {
+    logHistory = logHistory.slice(-50);
+  }
 
-    console.log(`[${hora}] ➤ ${msg}`);
-    io.emit('log', logCompleto);
+  console.log(`[${hora}] ➤ ${msg}`);
+  io.emit("log", logCompleto);
 }
 
 function logTerminal(msg) {
-    console.log(msg);
+  console.log(msg);
 }
 
 // --- MELHORIA: Função de sincronização mais resiliente ---
 async function sincronizarGrupos() {
-    if (state.clientEmDesconexao || !clientAtivo()) {
-        logDashboard('⚠️ WhatsApp não conectado. Sincronização cancelada.');
-        return;
+  if (state.clientEmDesconexao || !clientAtivo()) {
+    logDashboard("⚠️ WhatsApp não conectado. Sincronização cancelada.");
+    return;
+  }
+
+  let todosGrupos = [];
+  let sucessoBuscaChats = false;
+
+  try {
+    const chats = await client.getChats();
+    todosGrupos = chats.filter((c) => c.isGroup && c.id && c.id._serialized).map((g) => ({ id: g.id._serialized, name: g.name }));
+    if (todosGrupos.length > 0) {
+      logTerminal(chalk.blue("ℹ️ Diagnóstico de ID do primeiro grupo encontrado:"), todosGrupos[0].id);
     }
+    logDashboard(`🔍 ${todosGrupos.length} grupos encontrados no WhatsApp.`);
+    sucessoBuscaChats = true;
+  } catch (error) {
+    logTerminal(
+      chalk.yellow(
+        `⚠️ Aviso: Falha ao buscar a lista de grupos do WhatsApp (client.getChats). O erro foi ignorado. Causa: ${error.message}`
+      )
+    );
+  }
 
-    let todosGrupos = [];
-    let sucessoBuscaChats = false;
+  let gruposSalvos = [];
+  try {
+    const data = await fs.readFile(gruposSyncPath, "utf-8");
+    gruposSalvos = JSON.parse(data);
+  } catch {}
 
-    try {
-        const chats = await client.getChats();
-        todosGrupos = chats.filter(c => c.isGroup && c.id && c.id._serialized).map(g => ({ id: g.id._serialized, name: g.name }));
-        if (todosGrupos.length > 0) {
-            logTerminal(chalk.blue('ℹ️ Diagnóstico de ID do primeiro grupo encontrado:'), todosGrupos[0].id);
-        }
-        logDashboard(`🔍 ${todosGrupos.length} grupos encontrados no WhatsApp.`);
-        sucessoBuscaChats = true;
-    } catch (error) {
-        logTerminal(chalk.yellow(`⚠️ Aviso: Falha ao buscar a lista de grupos do WhatsApp (client.getChats). O erro foi ignorado. Causa: ${error.message}`));
-    }
+  state.gruposValidos = removerDuplicados(gruposSalvos);
 
-    let gruposSalvos = [];
-    try {
-        const data = await fs.readFile(gruposSyncPath, 'utf-8');
-        gruposSalvos = JSON.parse(data);
-    } catch {}
+  // SÓ atualiza a lista de não sincronizados se a busca no WhatsApp deu certo.
+  if (sucessoBuscaChats) {
+    const naoSincronizados = todosGrupos.filter((g) => !state.gruposValidos.some((v) => v.id === g.id));
+    await salvarJSONSeDiferente(gruposNaoSyncPath, naoSincronizados);
+  }
 
-    state.gruposValidos = removerDuplicados(gruposSalvos);
-
-    // SÓ atualiza a lista de não sincronizados se a busca no WhatsApp deu certo.
-    if (sucessoBuscaChats) {
-        const naoSincronizados = todosGrupos.filter(g => !state.gruposValidos.some(v => v.id === g.id));
-        await salvarJSONSeDiferente(gruposNaoSyncPath, naoSincronizados);
-    }
-    
-    logDashboard(`✅ ${state.gruposValidos.length} grupos válidos e configurados para envio.`);
+  logDashboard(`✅ ${state.gruposValidos.length} grupos válidos e configurados para envio.`);
 }
 
 async function iniciarAgendamento(options = {}) {
-    try {
-        const config = await carregarConfig();
+  try {
+    const config = await carregarConfig();
 
-        if (agendamento) {
-            agendamento.cancel();
-            if (!options.silent) {
-                logDashboard('🔁 Reiniciando agendamento...');
-            }
-        }
-
-        if (!config.habilitado) {
-            if (!options.silent) {
-                logDashboard('⏸️ Agendamento desativado.');
-            }
-            return;
-        }
-
-        // CORREÇÃO 2: Cálculo de milissegundos corrigido.
-        const intervaloMs = config.intervaloMinutos * 60 * 1000;
-        const proximaData = new Date(Date.now() + intervaloMs);
-
-        agendamento = schedule.scheduleJob('envio-mensagens', proximaData, async () => {
-            // CORREÇÃO 4: Adicionado try...catch para evitar que o bot trave.
-            try {
-                await enviarMensagensEmLote();
-                await iniciarAgendamento({ silent: true });
-            } catch (err) {
-                logDashboard(`❌ Erro fatal na execução agendada: ${err.message}. O agendamento será interrompido.`);
-                pararAgendamento(); // Interrompe para evitar loops de erro.
-            }
-        });
-
-        // CORREÇÃO PRINCIPAL: 'pt_BR' para 'pt-BR'.
-        const dataFormatada = proximaData.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        
-        if (!options.silent) {
-            logDashboard(`🕒 Agendamento definido. Próximo envio: ${dataFormatada}`);
-        } else {
-            logDashboard(`⏳ Próximo envio reagendado para: ${dataFormatada}`);
-        }
-    } catch (error) {
-        logDashboard(`❌ Erro crítico ao configurar o agendamento: ${error.message}`);
+    if (agendamento) {
+      agendamento.cancel();
+      if (!options.silent) {
+        logDashboard("🔁 Reiniciando agendamento...");
+      }
     }
+
+    if (!config.habilitado) {
+      if (!options.silent) {
+        logDashboard("⏸️ Agendamento desativado.");
+      }
+      return;
+    }
+
+    // CORREÇÃO 2: Cálculo de milissegundos corrigido.
+    const intervaloMs = config.intervaloMinutos * 60 * 1000;
+    const proximaData = new Date(Date.now() + intervaloMs);
+
+    agendamento = schedule.scheduleJob("envio-mensagens", proximaData, async () => {
+      // CORREÇÃO 4: Adicionado try...catch para evitar que o bot trave.
+      try {
+        await enviarMensagensEmLote();
+        await iniciarAgendamento({ silent: true });
+      } catch (err) {
+        logDashboard(`❌ Erro fatal na execução agendada: ${err.message}. O agendamento será interrompido.`);
+        pararAgendamento(); // Interrompe para evitar loops de erro.
+      }
+    });
+
+    // CORREÇÃO PRINCIPAL: 'pt_BR' para 'pt-BR'.
+    const dataFormatada = proximaData.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+
+    if (!options.silent) {
+      logDashboard(`🕒 Agendamento definido. Próximo envio: ${dataFormatada}`);
+    } else {
+      logDashboard(`⏳ Próximo envio reagendado para: ${dataFormatada}`);
+    }
+  } catch (error) {
+    logDashboard(`❌ Erro crítico ao configurar o agendamento: ${error.message}`);
+  }
 }
 
 async function pararAgendamento() {
-    if (agendamento) {
-        agendamento.cancel();
-        logDashboard('⏹️ Agendamento parado.');
-    }
+  if (agendamento) {
+    agendamento.cancel();
+    logDashboard("⏹️ Agendamento parado.");
+  }
 }
 
 async function enviarMensagensEmLote() {
-    try {
-        const gruposSalvos = JSON.parse(await fs.readFile(gruposSyncPath, 'utf-8'));
-        gruposValidos = removerDuplicados(gruposSalvos);
-    } catch {
-        logDashboard('⚠️ Nenhum grupo sincronizado para envio.');
-        return;
-    }
+  try {
+    const gruposSalvos = JSON.parse(await fs.readFile(gruposSyncPath, "utf-8"));
+    gruposValidos = removerDuplicados(gruposSalvos);
+  } catch {
+    logDashboard("⚠️ Nenhum grupo sincronizado para envio.");
+    return;
+  }
 
-    if (state.clientEmDesconexao || !clientAtivo()) {
-        logDashboard('⚠️ WhatsApp não está conectado. Cancelando envio.');
-        return;
-    }
+  if (state.clientEmDesconexao || !clientAtivo()) {
+    logDashboard("⚠️ WhatsApp não está conectado. Cancelando envio.");
+    return;
+  }
 
-    logDashboard(`🤖 Executando tarefa agendada para ${state.gruposValidos.length} grupo(s).`);
-    const config = await carregarConfig();
-    const INTERVALO = config.delayEnvioMs || 15000;
-    let historicoCompleto = {};
-    try {
-        historicoCompleto = JSON.parse(await fs.readFile(mensagensEnviadasPath, 'utf-8'));
-    } catch {}
+  logDashboard(`🤖 Executando tarefa agendada para ${state.gruposValidos.length} grupo(s).`);
+  const config = await carregarConfig();
+  const INTERVALO = config.delayEnvioMs || 15000;
+  let historicoCompleto = {};
+  try {
+    historicoCompleto = JSON.parse(await fs.readFile(mensagensEnviadasPath, "utf-8"));
+  } catch {}
 
-    for (let i = 0; i < state.gruposValidos.length; i++) {
-        const grupo = state.gruposValidos[i];
-        if (i > 0) await delay(INTERVALO);
-        const enviado = await enviarMensagemParaGrupo(grupo, historicoCompleto);
-        if (!enviado) logDashboard(`⏩ Nenhuma nova mensagem para "${grupo.name}".`);
-    }
+  for (let i = 0; i < state.gruposValidos.length; i++) {
+    const grupo = state.gruposValidos[i];
+    if (i > 0) await delay(INTERVALO);
+    const enviado = await enviarMensagemParaGrupo(grupo, historicoCompleto);
+    if (!enviado) logDashboard(`⏩ Nenhuma nova mensagem para "${grupo.name}".`);
+  }
 }
 
 async function enviarMensagemParaGrupo(grupo, historicoCompleto) {
-    try {
-        const nomeGrupo = grupo.name;
-        let mensagem; // Apenas declara a variável
+  try {
+    const nomeGrupo = grupo.name;
+    let mensagem; // Apenas declara a variável
 
-        // 1. VERIFICA O CACHE PRIMEIRO
-        if (state.mensagensPreGeradas.has(grupo.id)) {
-            // Se encontrou uma mensagem no cache, usa ela
-            mensagem = state.mensagensPreGeradas.get(grupo.id);
-            logDashboard(`✔️ Usando mensagem pré-aprovada do cache para "${nomeGrupo}".`);
-            // Limpa o cache para este grupo, pois a mensagem será usada agora
-            state.mensagensPreGeradas.delete(grupo.id);
-        
-        } else {
-            // 2. SE NÃO HOUVER CACHE, GERA UMA NOVA MENSAGEM (lógica antiga)
-            logDashboard(`🧠 Nenhuma mensagem em cache. Gerando nova mensagem para "${nomeGrupo}"...`);
-            mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
+    // 1. VERIFICA O CACHE PRIMEIRO
+    if (state.mensagensPreGeradas.has(grupo.id)) {
+      // Se encontrou uma mensagem no cache, usa ela
+      mensagem = state.mensagensPreGeradas.get(grupo.id);
+      logDashboard(`✔️ Usando mensagem pré-aprovada do cache para "${nomeGrupo}".`);
+      // Limpa o cache para este grupo, pois a mensagem será usada agora
+      state.mensagensPreGeradas.delete(grupo.id);
+    } else {
+      // 2. SE NÃO HOUVER CACHE, GERA UMA NOVA MENSAGEM (lógica antiga)
+      logDashboard(`🧠 Nenhuma mensagem em cache. Gerando nova mensagem para "${nomeGrupo}"...`);
+      mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
 
-            // 3. VERIFICA DUPLICIDADE (apenas para mensagens novas, não para as do cache)
-            const ultimas = (historicoCompleto[grupo.id]?.map(m => m.mensagem.trim()) || []).slice(-10);
-            let tentativas = 0;
-            
-            while (ultimas.includes(mensagem.trim()) && tentativas < 3) {
-                logDashboard(`🔄 Mensagem para "${nomeGrupo}" é repetida. Tentando gerar outra...`);
-                mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
-                tentativas++;
-            }
-            
-            // Se mesmo após as tentativas a mensagem ainda for repetida, pula o envio
-            if (ultimas.includes(mensagem.trim())) {
-                logDashboard(`⏩ Mensagem para "${nomeGrupo}" ainda é repetida após tentativas. Pulando envio.`);
-                return false;
-            }
-        }
+      // 3. VERIFICA DUPLICIDADE (apenas para mensagens novas, não para as do cache)
+      const ultimas = (historicoCompleto[grupo.id]?.map((m) => m.mensagem.trim()) || []).slice(-10);
+      let tentativas = 0;
 
-        // 4. ENVIA A MENSAGEM (seja ela do cache ou recém-gerada)
-        await client.sendMessage(grupo.id, mensagem);
-        await salvarMensagemNoHistorico(grupo.id, mensagem, nomeGrupo);
-        logDashboard(`📤 Mensagem enviada para "${nomeGrupo}"`);
-        return true;
+      while (ultimas.includes(mensagem.trim()) && tentativas < 3) {
+        logDashboard(`🔄 Mensagem para "${nomeGrupo}" é repetida. Tentando gerar outra...`);
+        mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
+        tentativas++;
+      }
 
-    } catch (err) {
-        let mensagemErro = err.message;
-
-        if (err.message && (err.message.toLowerCase().includes('closed group') || err.message.toLowerCase().includes('not an admin'))) {
-            mensagemErro = "O bot não é admin ou o grupo está configurado para 'Somente Admins'.";
-        }
-
-        logDashboard(`❌ Erro ao enviar para "${grupo.name}": ${err.message}`);
+      // Se mesmo após as tentativas a mensagem ainda for repetida, pula o envio
+      if (ultimas.includes(mensagem.trim())) {
+        logDashboard(`⏩ Mensagem para "${nomeGrupo}" ainda é repetida após tentativas. Pulando envio.`);
         return false;
+      }
     }
+
+    // 4. ENVIA A MENSAGEM (seja ela do cache ou recém-gerada)
+    await client.sendMessage(grupo.id, mensagem);
+    await salvarMensagemNoHistorico(grupo.id, mensagem, nomeGrupo);
+    logDashboard(`📤 Mensagem enviada para "${nomeGrupo}"`);
+    return true;
+  } catch (err) {
+    let mensagemErro = err.message;
+
+    if (err.message && (err.message.toLowerCase().includes("closed group") || err.message.toLowerCase().includes("not an admin"))) {
+      mensagemErro = "O bot não é admin ou o grupo está configurado para 'Somente Admins'.";
+    }
+
+    logDashboard(`❌ Erro ao enviar para "${grupo.name}": ${err.message}`);
+    return false;
+  }
 }
 
 // ... Funções de utilidade (salvarJSONSeDiferente, salvarMensagemNoHistorico, etc.) ...
 async function salvarJSONSeDiferente(caminho, conteudo) {
-    const jsonNovo = JSON.stringify(conteudo, null, 2);
-    try {
-        const jsonAntigo = await fs.readFile(caminho, 'utf-8');
-        if (jsonAntigo !== jsonNovo) {
-            await fs.mkdir(path.dirname(caminho), { recursive: true });
-            await fs.writeFile(caminho, jsonNovo, 'utf-8');
-        }
-    } catch {
-        await fs.mkdir(path.dirname(caminho), { recursive: true });
-        await fs.writeFile(caminho, jsonNovo, 'utf-8');
+  const jsonNovo = JSON.stringify(conteudo, null, 2);
+  try {
+    const jsonAntigo = await fs.readFile(caminho, "utf-8");
+    if (jsonAntigo !== jsonNovo) {
+      await fs.mkdir(path.dirname(caminho), { recursive: true });
+      await fs.writeFile(caminho, jsonNovo, "utf-8");
     }
+  } catch {
+    await fs.mkdir(path.dirname(caminho), { recursive: true });
+    await fs.writeFile(caminho, jsonNovo, "utf-8");
+  }
 }
 
 async function salvarMensagemNoHistorico(grupoId, mensagem, nomeGrupo) {
+  try {
+    let historico = {};
     try {
-        let historico = {};
-        try {
-            historico = JSON.parse(await fs.readFile(mensagensEnviadasPath, 'utf-8'));
-        } catch { }
+      historico = JSON.parse(await fs.readFile(mensagensEnviadasPath, "utf-8"));
+    } catch {}
 
-        if (!historico[grupoId]) historico[grupoId] = [];
+    if (!historico[grupoId]) historico[grupoId] = [];
 
-        historico[grupoId].push({
-            nomeGrupo,
-            mensagem,
-            horario: new Date().toISOString()
-        });
-        historico[grupoId] = historico[grupoId].slice(-50);
-        await salvarJSONSeDiferente(mensagensEnviadasPath, historico);
-    } catch (err) {
-        logDashboard('Erro ao salvar no histórico: ' + err.message);
-    }
+    historico[grupoId].push({
+      nomeGrupo,
+      mensagem,
+      horario: new Date().toISOString(),
+    });
+    historico[grupoId] = historico[grupoId].slice(-50);
+    await salvarJSONSeDiferente(mensagensEnviadasPath, historico);
+  } catch (err) {
+    logDashboard("Erro ao salvar no histórico: " + err.message);
+  }
 }
 
 function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function carregarConfig() {
-    try {
-        const data = await fs.readFile(configPath, 'utf-8');
-        return JSON.parse(data);
-    } catch {
-        return { intervaloMinutos: 30, habilitado: true, delayEnvioMs: 15000 };
-    }
+  try {
+    const data = await fs.readFile(configPath, "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return { intervaloMinutos: 30, habilitado: true, delayEnvioMs: 15000 };
+  }
 }
 
 async function salvarConfig(config) {
-    await salvarJSONSeDiferente(configPath, config);
+  await salvarJSONSeDiferente(configPath, config);
 }
 
 // --- 📡 CONFIGURAÇAO DAS ROTAS do Dashboard ---
 const dependencies = {
-    logDashboard, logTerminal, clientAtivo, sincronizarGrupos, iniciarAgendamento, pararAgendamento,
-    initializeClient, destroyClient, 
-    salvarJSONSeDiferente, carregarConfig, salvarConfig, delay, gerarMensagemIA,
-    path, fs,
-    gruposSyncPath, gruposNaoSyncPath, mensagensEnviadasPath, configPath,
-    get client() { return client; },
-    state
+  logDashboard,
+  logTerminal,
+  clientAtivo,
+  sincronizarGrupos,
+  iniciarAgendamento,
+  pararAgendamento,
+  initializeClient,
+  destroyClient,
+  salvarJSONSeDiferente,
+  carregarConfig,
+  salvarConfig,
+  delay,
+  gerarMensagemIA,
+  path,
+  fs,
+  gruposSyncPath,
+  gruposNaoSyncPath,
+  mensagensEnviadasPath,
+  configPath,
+  get client() {
+    return client;
+  },
+  state,
 };
 
 const apiRouter = createApiRouter(dependencies);
-app.use('/api', apiRouter);
-
+app.use("/api", apiRouter);
 
 // --- Rota da Interface ---
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'views', 'index.html'));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "index.html"));
 });
 
 // --- Inicialização do Servidor ---
 server.listen(PORT, () => {
-    logTerminal(`🔧 Dashboard e API disponíveis em: http://localhost:${PORT}`);
+  logTerminal(`🔧 Dashboard e API disponíveis em: http://localhost:${PORT}`);
 
-    io.on('connection', (socket) => {
-        logTerminal('Um usuário se conectou ao dashboard via Socket.IO');
+  io.on("connection", (socket) => {
+    logTerminal("Um usuário se conectou ao dashboard via Socket.IO");
 
-        socket.emit('log_history', logHistory);
+    socket.emit("log_history", logHistory);
 
-        socket.on('qr_scan_aborted', () => {
-            logDashboard('🚫 Escaneamento de QR Code cancelado pelo usuário.');
-            destroyClient();
-        });
+    socket.on("qr_scan_aborted", () => {
+      logDashboard("🚫 Escaneamento de QR Code cancelado pelo usuário.");
+      destroyClient();
     });
+  });
 });

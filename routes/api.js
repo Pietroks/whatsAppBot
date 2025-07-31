@@ -2,6 +2,10 @@
 
 const express = require("express");
 const fs = require("fs").promises;
+const multer = require("multer");
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 // Esta função cria e configura o roteador.
 // Ela recebe as dependências (funções e variáveis) do arquivo principal.
@@ -258,6 +262,30 @@ function createApiRouter(dependencies) {
     } catch (err) {
       logDashboard("❌ Erro ao desconectar: " + err.message);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.post("/upload-pdf/:groupId", upload.single("pdfFile"), async (req, res) => {
+    const { groupId } = req.params;
+    const file = req.file;
+
+    if (!groupId || !file) {
+      return res.status(400).json({ error: "ID do grupo e arquivo PDF são obrigatórios." });
+    }
+
+    // Garante que o caminho para a pasta 'PDFs' está correto
+    const pdfsPath = path.join(__dirname, "..", "PDFs");
+    const newFileName = `${groupId}.pdf`;
+    const filePath = path.join(pdfsPath, newFileName);
+
+    try {
+      await fs.mkdir(pdfsPath, { recursive: true });
+      await fs.writeFile(filePath, file.buffer); // Salva o arquivo recebido
+      logDashboard(`📄 PDF para o grupo ${groupId} foi atualizado via dashboard.`);
+      res.json({ ok: true, message: "PDF enviado com sucesso." });
+    } catch (error) {
+      logDashboard(`❌ Erro ao salvar o PDF para o grupo ${groupId}: ${error.message}`);
+      res.status(500).json({ error: "Falha ao salvar o PDF no servidor." });
     }
   });
 
