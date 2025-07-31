@@ -5,6 +5,7 @@ const axios = require('axios');
 const pdfParse = require('pdf-parse');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+console.log(chalk.cyanBright("Verificando a chave da API no 'gerarMensagemIA':", OPENAI_API_KEY ? `Chave encontrada começando com: ${OPENAI_API_KEY.substring(0, 5)}...` : "CHAVE NÃO ENCONTRADA OU VAZIA"));
 
 async function gerarMensagemIA(nomeGrupoOuCurso, grupoId) {
   try {
@@ -20,7 +21,7 @@ async function gerarMensagemIA(nomeGrupoOuCurso, grupoId) {
     }
 
     const prompt = pdfText
-      ? `Você é uma pessoa que cuida de um grupo no WhatsApp de um curso chamado "${nomeGrupoOuCurso}". Com base nesse trecho do material do curso:\n\n"${pdfText}"\n\nEscreva uma mensagem de tamanho média e natural para o grupo, como se fosse um colega falando com os alunos. Evite parecer uma IA ou uma mensagem de marketing. Pode comentar algo que achou interessante do conteúdo, fazer uma pergunta para o grupo ou dar um toque simples, como um lembrete ou novidade. Nada de hashtags, listas, links ou mensagens muito longas.`
+      ? `Com base no material do curso chamado "${nomeGrupoOuCurso}". E com  base nesse trecho do material do curso:\n\n"${pdfText}"\n\nEscreva uma mensagem de WhatsApp para um grupo de alunos. O tom deve ser de um colega, com tamanho médio e natural. Não utilize hashtags, listas, links ou mensagens muito longas. Não repita partes da ementa ou do tema do curso. Em vez disso, aborde o assunto da ementa de forma natural, trazendo algo interessante sobre ele (curiosidades, fatos ou notícias) e uma pergunta final de "sim ou não". A mensagem deve ser atemporal, sem mencionar datas.`
       : `Escreva uma mensagem curta e natural para um grupo de WhatsApp do curso "${nomeGrupoOuCurso}", como se fosse um colega animando os alunos. Pode dar uma dica, contar uma novidade ou só puxar conversa. Evite listas, hashtags, links ou parecer uma IA. Use uma linguagem simples e direta.`;
 
     const { data } = await axios.post(
@@ -47,7 +48,19 @@ async function gerarMensagemIA(nomeGrupoOuCurso, grupoId) {
     return respostaIA.trim();
   } catch (err) {
     console.error(chalk.red(`❌ Erro ao gerar mensagem para grupo ${grupoId}:`, err.message));
-    return `Olá! Hoje é um bom momento para revisar os conteúdos do curso "${nomeGrupoOuCurso}". Em breve enviaremos novidades!`;
+    
+    const mensagensGenericas = [
+      `Pessoal, passando para lembrar de dar uma olhada no material do curso "${nomeGrupoOuCurso}". Bons estudos!`,
+      `E aí, turma! Tudo certo com os estudos em "${nomeGrupoOuCurso}"? Qualquer dúvida, mandem aqui!`,
+      `Uma ótima semana de estudos para todos do curso "${nomeGrupoOuCurso}"! Vamos com tudo! ✨`,
+      `Só para dar um alô e desejar foco total nos estudos do curso "${nomeGrupoOuCurso}"!`,
+      `Lembrete amigável: que tal separar um tempinho hoje para o nosso curso "${nomeGrupoOuCurso}"? 😉`,
+      `Olá! Hoje é um bom momento para revisar os conteúdos do curso "${nomeGrupoOuCurso}". Em breve enviaremos novidades!`
+    ];
+
+    const indiceAleatorio = Math.floor(Math.random() * mensagensGenericas.length);
+
+    return mensagensGenericas[indiceAleatorio];
   }
 }
 

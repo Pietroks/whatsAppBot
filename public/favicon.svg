@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="a" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#10B981"/>
+    </linearGradient>
+    <radialGradient id="b" cx="0" cy="0" r="1" gradientTransform="matrix(0 -256 256 0 128 128)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path fill="url(#a)" d="M256 128c0 70.69-57.31 128-128 128S0 198.69 0 128 57.31 0 128 0s128 57.31 128 128z"/>
+  <path fill="url(#b)" d="M256 128c0 70.69-57.31 128-128 128S0 198.69 0 128 57.31 0 128 0s128 57.31 128 128z" style="mix-blend-mode:overlay"/>
+  <g fill="#fff">
+    <path d="M149.33 192h-42.66a8 8 0 0 1 0-16h42.66a8 8 0 0 1 0 16z"/>
+    <circle cx="168" cy="136" r="24"/>
+    <circle cx="88" cy="136" r="24"/>
+    <path d="M145.41 64h-34.82a16.59 16.59 0 0 0-16.59 16.59v12.2a4 4 0 0 0 8 0v-12.2a8.59 8.59 0 0 1 8.59-8.59h34.82a8.59 8.59 0 0 1 8.59 8.59v12.2a4 4 0 0 0 8 0v-12.2a16.59 16.59 0 0 0-16.59-16.59z"/>
+    <path d="M128 48a12 12 0 1 0-12-12 12 12 0 0 0 12 12z"/>
+  </g>
+</svg>
