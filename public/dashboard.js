@@ -122,12 +122,40 @@ async function desconectarBot() {
   await verificarStatus();
 }
 
+//  função para salvar os prompts
+async function salvarPrompts() {
+  const promptComPdf = document.getElementById("promptComPdf").value;
+  const promptSemPdf = document.getElementById("promptSemPdf").value;
+
+  if (!promptComPdf || !promptSemPdf) {
+    return showToast("⚠️ Os dois campos de prompt devem ser preenchidos.", "warning");
+  }
+
+  const res = await fetch("/api/config/prompts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ promptComPdf, promptSemPdf }),
+  });
+
+  if (res.ok) {
+    showToast("✅ Prompts salvos com sucesso!", "success");
+  } else {
+    showToast("❌ Erro ao salvar os prompts.", "danger");
+  }
+}
+
 async function carregarConfig() {
   const res = await fetch("/api/config");
   if (res.ok) {
     const cfg = await res.json();
     document.getElementById("intervalo").value = cfg.intervaloMinutos;
     document.getElementById("delay").value = cfg.delayEnvioMs;
+
+    // Preenche os campos de prompt
+    if (document.getElementById("promptComPdf")) {
+      document.getElementById("promptComPdf").value = cfg.promptComPdf;
+      document.getElementById("promptSemPdf").value = cfg.promptSemPdf;
+    }
   }
 }
 

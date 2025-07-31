@@ -1,5 +1,7 @@
 {
   "intervaloMinutos": 1,
   "habilitado": false,
-  "delayEnvioMs": 25000
+  "delayEnvioMs": 25000,
+  "promptComPdf": "Com base no material do curso chamado \"{{nomeGrupo}}\". E com base nesse trecho do material do curso:\n\n\"{{conteudoPDF}}\"\n\nEscreva uma mensagem de WhatsApp para um grupo de alunos. O tom deve ser de um colega, com tamanho médio e natural. Não utilize hashtags, listas, links ou mensagens muito longas. Não repita partes da ementa ou do tema do curso. Em vez disso, aborde o assunto da ementa de forma natural, trazendo algo interessante sobre ele (curiosidades, fatos ou notícias) e uma pergunta final de \"sim ou não\". A mensagem deve ser atemporal, sem mencionar datas.",
+  "promptSemPdf": "Escreva uma mensagem curta e natural contando fatos sobre peixes raros para um grupo de WhatsApp do curso \"{{nomeGrupo}}\"."
 }

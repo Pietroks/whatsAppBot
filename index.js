@@ -299,6 +299,8 @@ async function enviarMensagemParaGrupo(grupo, historicoCompleto) {
     const nomeGrupo = grupo.name;
     let mensagem; // Apenas declara a variável
 
+    const config = await carregarConfig();
+
     // 1. VERIFICA O CACHE PRIMEIRO
     if (state.mensagensPreGeradas.has(grupo.id)) {
       // Se encontrou uma mensagem no cache, usa ela
@@ -309,7 +311,7 @@ async function enviarMensagemParaGrupo(grupo, historicoCompleto) {
     } else {
       // 2. SE NÃO HOUVER CACHE, GERA UMA NOVA MENSAGEM (lógica antiga)
       logDashboard(`🧠 Nenhuma mensagem em cache. Gerando nova mensagem para "${nomeGrupo}"...`);
-      mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
+      mensagem = await gerarMensagemIA(nomeGrupo, grupo.id, config);
 
       // 3. VERIFICA DUPLICIDADE (apenas para mensagens novas, não para as do cache)
       const ultimas = (historicoCompleto[grupo.id]?.map((m) => m.mensagem.trim()) || []).slice(-10);
@@ -317,7 +319,7 @@ async function enviarMensagemParaGrupo(grupo, historicoCompleto) {
 
       while (ultimas.includes(mensagem.trim()) && tentativas < 3) {
         logDashboard(`🔄 Mensagem para "${nomeGrupo}" é repetida. Tentando gerar outra...`);
-        mensagem = await gerarMensagemIA(nomeGrupo, grupo.id);
+        mensagem = await gerarMensagemIA(nomeGrupo, grupo.id, config);
         tentativas++;
       }
 
@@ -386,11 +388,24 @@ function delay(ms) {
 }
 
 async function carregarConfig() {
+  const defaultConfig = {
+    intervaloMinutos: 30,
+    habilitado: true,
+    delayEnvioMs: 15000,
+    promptComPdf:
+      'Com base no material do curso chamado "{{nomeGrupo}}". E com base nesse trecho do material do curso:\n\n"{{conteudoPDF}}"\n\nEscreva uma mensagem de WhatsApp para um grupo de alunos. O tom deve ser de um colega, com tamanho médio e natural. Não utilize hashtags, listas, links ou mensagens muito longas. Não repita partes da ementa ou do tema do curso. Em vez disso, aborde o assunto da ementa de forma natural, trazendo algo interessante sobre ele (curiosidades, fatos ou notícias) e uma pergunta final de "sim ou não". A mensagem deve ser atemporal, sem mencionar datas.',
+    promptSemPdf:
+      'Escreva uma mensagem curta e natural para um grupo de WhatsApp do curso "{{nomeGrupo}}", como se fosse um colega animando os alunos. Pode dar uma dica, contar uma novidade ou só puxar conversa. Evite listas, hashtags, links ou parecer uma IA. Use uma linguagem simples e direta.',
+  };
+
   try {
     const data = await fs.readFile(configPath, "utf-8");
-    return JSON.parse(data);
+    const userConfig = JSON.parse(data);
+    // Mescla a configuração do usuário com a padrão, garantindo que todos os campos existam
+    return { ...defaultConfig, ...userConfig };
   } catch {
-    return { intervaloMinutos: 30, habilitado: true, delayEnvioMs: 15000 };
+    // Se o arquivo não existir ou for inválido, retorna a configuração padrão completa
+    return defaultConfig;
   }
 }
 

@@ -117,14 +117,19 @@ function createApiRouter(dependencies) {
     const { id, name } = req.body;
 
     if (!id || !name) {
-      return req.status(400).json({ error: "ID e Nome do grupo são obrigatórios." });
+      return res.status(400).json({ error: "ID e Nome do grupo são obrigatórios." });
     }
 
     try {
       logDashboard(`🧪 Gerando mensagem de teste para "${name}"...`);
-      const mensagem = await gerarMensagemIA(name, id);
 
-      // gera a mensagem teste no cache, associada ao id do grupo
+      // --- INÍCIO DA CORREÇÃO ---
+      // Carrega a configuração atual para ter acesso aos prompts
+      const config = await carregarConfig();
+      // Passa a 'config' como terceiro argumento para a função
+      const mensagem = await gerarMensagemIA(name, id, config);
+      // --- FIM DA CORREÇÃO ---
+
       dependencies.state.mensagensPreGeradas.set(id, mensagem);
       logDashboard(`👍 Mensagem para "${name}" foi pré-aprovada e salva no cache.`);
 
@@ -289,6 +294,24 @@ function createApiRouter(dependencies) {
     }
   });
 
+  router.post("/config/prompts", async (req, res) => {
+    const { promptComPdf, promptSemPdf } = req.body;
+    if (!promptComPdf || !promptSemPdf) {
+      return res.status(400).json({ error: "Ambos os prompts são obrigatórios." });
+    }
+
+    try {
+      const config = await carregarConfig();
+      config.promptComPdf = promptComPdf;
+      config.promptSemPdf = promptSemPdf;
+      await salvarConfig(config);
+      logDashboard("✍️ Prompts da IA foram atualizados pelo dashboard.");
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: "Falha ao salvar os prompts." });
+    }
+  });
+
   router.get("/status", (req, res) => {
     res.json({ status: clientAtivo() ? "conectado" : "desconectado" });
   });
@@ -346,8 +369,12 @@ function createApiRouter(dependencies) {
   });
 
   router.get("/config", async (req, res) => {
-    const config = await carregarConfig();
-    res.json(config);
+    try {
+      const config = await carregarConfig();
+      res.json(config);
+    } catch (error) {
+      res.status(500).json({ error: "Falha ao carregar a configuração." });
+    }
   });
 
   return router;
