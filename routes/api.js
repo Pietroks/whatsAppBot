@@ -56,8 +56,12 @@ function createApiRouter(dependencies) {
       let gruposSync = JSON.parse(gruposSyncRaw);
       let gruposNaoSync = JSON.parse(gruposNaoSyncRaw);
 
+      const grupoParaSincronizar = gruposNaoSync.find((g) => g.id === id);
+      const grupoCompleto = grupoParaSincronizar || { id, name, participantes: [] };
+
       if (!gruposSync.find((g) => g.id === id)) {
-        gruposSync.push({ id, name });
+        // Adiciona o objeto completo ao invés de apenas id e name
+        gruposSync.push(grupoCompleto);
       }
 
       const novosNaoSync = gruposNaoSync.filter((g) => g.id !== id);
@@ -65,7 +69,7 @@ function createApiRouter(dependencies) {
       await salvarJSONSeDiferente(gruposSyncPath, gruposSync);
       await salvarJSONSeDiferente(gruposNaoSyncPath, novosNaoSync);
 
-      dependencies.state.gruposValidos = gruposSync.map((g) => g); // Atualiza a variável de estado
+      dependencies.state.gruposValidos = gruposSync; // Atualiza a variável de estado
       logDashboard(`✅ Grupo "${name}" sincronizado`);
 
       await sincronizarGrupos();
@@ -94,22 +98,89 @@ function createApiRouter(dependencies) {
       let gruposSync = JSON.parse(gruposSyncRaw);
       let gruposNaoSync = JSON.parse(gruposNaoSyncRaw);
 
+      const grupoParaDesincronizar = gruposSync.find((g) => g.id === id);
       const novosGruposSync = gruposSync.filter((g) => g.id !== id);
 
       if (!gruposNaoSync.find((g) => g.id === id)) {
-        gruposNaoSync.push({ id, name });
+        // Adiciona o objeto completo (se encontrado) para preservar os participantes
+        if (grupoParaDesincronizar) {
+          gruposNaoSync.push(grupoParaDesincronizar);
+        } else {
+          // Fallback caso não encontre (pouco provável)
+          gruposNaoSync.push({ id, name, participantes: [] });
+        }
       }
 
       await salvarJSONSeDiferente(gruposSyncPath, novosGruposSync);
       await salvarJSONSeDiferente(gruposNaoSyncPath, gruposNaoSync);
 
-      dependencies.state.gruposValidos = novosGruposSync.map((g) => g); // Atualiza a variável de estado
+      dependencies.state.gruposValidos = novosGruposSync; // Atualiza a variável de estado
       logDashboard(`➖ Grupo "${name}" foi desincronizado`);
       logDashboard(`✅ ${novosGruposSync.length} grupos válidos e configurados para envio.`);
       res.json({ ok: true });
     } catch (err) {
       logDashboard(`❌ Erro ao desincronizar o grupo "${name}": ${err.message}`);
       res.status(500).json({ error: "Falha ao desincronizar grupo." });
+    }
+  });
+
+  router.get("/grupo/:id/participantes", async (req, res) => {
+    const { id } = req.params;
+    if (!dependencies.clientAtivo()) {
+      return res.status(400).json({ error: "WhatsApp não está conectado." });
+    }
+
+    try {
+      // Usa o 'client' diretamente para buscar o chat
+      const chat = await dependencies.client.getChatById(id);
+      if (!chat || !chat.isGroup) {
+        return res.status(404).json({ error: "Grupo não encontrado." });
+      }
+
+      const participantesInfo = [];
+      // Mapeia os participantes e busca os detalhes de cada um
+      for (const p of chat.participants) {
+        try {
+          const contact = await dependencies.client.getContactById(p.id._serialized);
+          participantesInfo.push({
+            id: p.id._serialized,
+            name: contact.name || contact.pushname || p.id._serialized.split("@")[0],
+          });
+        } catch (e) {
+          // Fallback caso um contato falhe
+          participantesInfo.push({
+            id: p.id._serialized,
+            name: p.id._serialized.split("@")[0],
+          });
+        }
+      }
+
+      // Envia a lista ordenada e atualizada
+      res.json(participantesInfo.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+      dependencies.logDashboard(`❌ Erro ao buscar participantes em tempo real: ${error.message}`);
+      res.status(500).json({ error: "Falha ao obter a lista de participantes." });
+    }
+  });
+
+  router.post("/enviar-mensagem-individual", async (req, res) => {
+    const { userIds, mensagem } = req.body;
+
+    if (!clientAtivo()) {
+      return res.status(400).json({ error: "WhatsApp não está conectado." });
+    }
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: "Nenhum usuário selecionado." });
+    }
+    if (!mensagem) {
+      return res.status(400).json({ error: "A mensagem não pode estar vazia." });
+    }
+
+    try {
+      await dependencies.enviarMensagensIndividuais(userIds, mensagem);
+      res.json({ ok: true, message: "Comando de envio recebido." });
+    } catch (err) {
+      res.status(500).json({ error: "Falha ao iniciar o processo de envio." });
     }
   });
 

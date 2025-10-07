@@ -389,6 +389,30 @@
         </div>
       </div>
     </div>
+    <div class="modal fade" id="modalParticipantes" tabindex="-1" aria-labelledby="tituloModalParticipantes" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="tituloModalParticipantes">Participantes do Grupo</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="form-participantes">
+              <div class="mb-3">
+                <label for="mensagem-individual" class="form-label">Mensagem para os selecionados:</label>
+                <textarea class="form-control" id="mensagem-individual" rows="4" placeholder="Escreva sua mensagem aqui..."></textarea>
+              </div>
+              <p>Selecione os participantes:</p>
+              <div id="listaParticipantes"></div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-success" id="btn-enviar-selecionados">Enviar para Selecionados</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>

@@ -168,7 +168,6 @@ function logTerminal(msg) {
   console.log(msg);
 }
 
-// --- MELHORIA: Função de sincronização mais resiliente ---
 async function sincronizarGrupos() {
   if (state.clientEmDesconexao || !clientAtivo()) {
     logDashboard("⚠️ WhatsApp não conectado. Sincronização cancelada.");
@@ -180,7 +179,9 @@ async function sincronizarGrupos() {
 
   try {
     const chats = await client.getChats();
+    // Apenas mapeia o ID e o NOME do grupo. Simples e rápido.
     todosGrupos = chats.filter((c) => c.isGroup && c.id && c.id._serialized).map((g) => ({ id: g.id._serialized, name: g.name }));
+
     if (todosGrupos.length > 0) {
       logTerminal(chalk.blue("ℹ️ Diagnóstico de ID do primeiro grupo encontrado:"), todosGrupos[0].id);
     }
@@ -202,7 +203,6 @@ async function sincronizarGrupos() {
 
   state.gruposValidos = removerDuplicados(gruposSalvos);
 
-  // SÓ atualiza a lista de não sincronizados se a busca no WhatsApp deu certo.
   if (sucessoBuscaChats) {
     const naoSincronizados = todosGrupos.filter((g) => !state.gruposValidos.some((v) => v.id === g.id));
     await salvarJSONSeDiferente(gruposNaoSyncPath, naoSincronizados);
@@ -347,6 +347,25 @@ async function enviarMensagemParaGrupo(grupo, historicoCompleto) {
   }
 }
 
+async function enviarMensagensIndividuais(userIds, mensagem) {
+  logDashboard(`📨 Iniciando envio individual para ${userIds.length} contatos.`);
+  const config = await carregarConfig();
+  const INTERVALO = config.delayEnvioMs || 5000;
+
+  for (let i = 0; i < userIds.length; i++) {
+    const userId = userIds[i];
+    if (i > 0) await delay(INTERVALO);
+
+    try {
+      await client.sendMessage(userId, mensagem);
+      logDashboard(`📤 Mensagem enviada para ${userId.split("@")[0]}`);
+    } catch (err) {
+      logDashboard(`❌ Falha ao enviar para ${userId.split("@")[0]}: ${err.message}`);
+    }
+  }
+  logDashboard("✅ Envio individual concluído.");
+}
+
 // ... Funções de utilidade (salvarJSONSeDiferente, salvarMensagemNoHistorico, etc.) ...
 async function salvarJSONSeDiferente(caminho, conteudo) {
   const jsonNovo = JSON.stringify(conteudo, null, 2);
@@ -428,6 +447,7 @@ const dependencies = {
   salvarConfig,
   delay,
   gerarMensagemIA,
+  enviarMensagensIndividuais,
   path,
   fs,
   gruposSyncPath,

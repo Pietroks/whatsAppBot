@@ -366,24 +366,29 @@ async function carregarGruposSync() {
       grupos.forEach((grupo) => {
         const escapedName = grupo.name.replace(/'/g, "\\'");
         const linha = `
-                    <tr>
-                        <td>${grupo.name}</td>
-                        <td class="text-end">
-                            <input type="file" id="pdf-upload-${grupo.id}" class="d-none" accept=".pdf">
+                      <tr>
+                          <td>${grupo.name}</td>
+                          <td class="text-end">
+                              <input type="file" id="pdf-upload-${grupo.id}" class="d-none" accept=".pdf">
 
-                            <div class="btn-group" role="group" style="display: inline-flex; gap: 1rem;">
-                                <button class="btn btn-sm btn-primary" title="Enviar PDF" onclick="document.getElementById('pdf-upload-${grupo.id}').click()">
-                                    📤 PDF
-                                </button>
-                                <button class="btn btn-sm btn-info" title="Testar Mensagem" onclick="testarMensagem('${grupo.id}', '${escapedName}')">
-                                    🧪 Testar
-                                </button>
-                                <button class="btn btn-sm btn-danger" title="Desincronizar Grupo" onclick="desincronizarGrupo('${grupo.id}', '${escapedName}')">
-                                    ➖ Desincronizar
-                                </button>
-                            </div>
-                        </td>
-                    </tr>`;
+                              <div class="btn-group" role="group" style="display: inline-flex; gap: 1rem;">
+                                  
+                                  <button class="btn btn-sm btn-secondary" title="Ver Participantes" onclick="verParticipantes('${grupo.id}', '${escapedName}')">
+                                    👥 Ver
+                                  </button>
+
+                                  <button class="btn btn-sm btn-primary" title="Enviar PDF" onclick="document.getElementById('pdf-upload-${grupo.id}').click()">
+                                      📤 PDF
+                                  </button>
+                                  <button class="btn btn-sm btn-info" title="Testar Mensagem" onclick="testarMensagem('${grupo.id}', '${escapedName}')">
+                                      🧪 Testar
+                                  </button>
+                                  <button class="btn btn-sm btn-danger" title="Desincronizar Grupo" onclick="desincronizarGrupo('${grupo.id}', '${escapedName}')">
+                                      ➖ Desincronizar
+                                  </button>
+                              </div>
+                          </td>
+                      </tr>`;
         tbody.insertAdjacentHTML("beforeend", linha);
 
         // Adiciona o listener para o input de arquivo recém-criado
@@ -436,6 +441,101 @@ async function sincronizarGrupo(id, name) {
   } else {
     showToast(`❌ Erro ao sincronizar.`, "danger");
   }
+}
+
+async function verParticipantes(grupoId, grupoNome) {
+  const modalElement = document.getElementById("modalParticipantes");
+  const modal = new bootstrap.Modal(modalElement);
+  const containerParticipantes = document.getElementById("listaParticipantes");
+  const tituloModal = document.getElementById("tituloModalParticipantes");
+  const btnEnviar = document.getElementById("btn-enviar-selecionados");
+
+  tituloModal.textContent = `Carregando participantes de "${grupoNome}"...`;
+  containerParticipantes.innerHTML = "<p>Buscando em tempo real...</p>";
+  modal.show();
+
+  try {
+    // MODIFICAÇÃO: Aponta para a nova rota da API
+    const res = await fetch(`/api/grupo/${grupoId}/participantes`);
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.error || `Erro ${res.status}`);
+    }
+
+    const participantes = await res.json();
+    tituloModal.textContent = `Participantes de "${grupoNome}" (${participantes.length})`;
+    containerParticipantes.innerHTML = "";
+
+    if (participantes.length === 0) {
+      containerParticipantes.innerHTML = "<p>Nenhum participante encontrado.</p>";
+      return;
+    }
+
+    // O restante da lógica para exibir os checkboxes permanece igual
+    participantes.forEach((p) => {
+      const numero = p.id.split("@")[0];
+      const div = document.createElement("div");
+      div.className = "form-check";
+      div.innerHTML = `
+        <input class="form-check-input" type="checkbox" value="${p.id}" id="check-${p.id}">
+        <label class="form-check-label" for="check-${p.id}">
+          <strong>${p.name}</strong> (${numero})
+        </label>
+      `;
+      containerParticipantes.appendChild(div);
+    });
+
+    btnEnviar.onclick = () => enviarMensagemParaSelecionados(modal);
+  } catch (error) {
+    console.error("Erro ao buscar participantes:", error);
+    tituloModal.textContent = "Erro ao carregar";
+    // Exibe o erro de forma mais clara no modal
+    containerParticipantes.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+  }
+}
+
+async function enviarMensagemParaSelecionados(modal) {
+  const mensagem = document.getElementById("mensagem-individual").value;
+  const checkboxes = document.querySelectorAll('#listaParticipantes input[type="checkbox"]:checked');
+  const userIds = Array.from(checkboxes).map((cb) => cb.value);
+
+  if (!mensagem) {
+    return showToast("⚠️ Escreva uma mensagem para enviar.", "warning");
+  }
+  if (userIds.length === 0) {
+    return showToast("⚠️ Selecione pelo menos um participante.", "warning");
+  }
+
+  modal.hide();
+
+  const confirmou = await showConfirm(`Deseja mesmo enviar a mensagem para ${userIds.length} pessoa(s)?`);
+  if (!confirmou) {
+    modal.show();
+    return;
+  }
+  showToast(`🚀 Enviando mensagem para ${userIds.length} contatos...`, "info");
+  modal.hide();
+
+  try {
+    const res = await fetch("/api/enviar-mensagem-individual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userIds, mensagem }),
+    });
+
+    if (res.ok) {
+      showToast("✅ Mensagens enviadas com sucesso!", "success");
+    } else {
+      const errorData = await res.json();
+      showToast(`❌ Erro: ${errorData.error}`, "danger");
+    }
+  } catch (error) {
+    showToast("❌ Erro de rede ao tentar enviar.", "danger");
+  }
+
+  document.getElementById("mensagem-individual").value = "";
+  checkboxes.forEach((cb) => (cb.checked = false));
 }
 
 // FUNÇÃO PARA UPLOAD DE PDF
