@@ -124,6 +124,31 @@ function createApiRouter(dependencies) {
     }
   });
 
+  router.get("/contatos", async (req, res) => {
+    if (!dependencies.clientAtivo()) {
+      return res.status(400).json({ error: "WhatsApp não está conectado." });
+    }
+    try {
+      const contatos = await dependencies.client.getContacts();
+      const contatosFiltrados = contatos
+        .filter(
+          (c) =>
+            c.id._serialized.endsWith("@c.us") && // Garante que é um ID de contato padrão
+            c.isMyContact &&
+            !c.isGroup
+        )
+        .map((c) => ({
+          id: c.id._serialized,
+          name: c.name || c.pushname || c.id._serialized.split("@")[0],
+        }));
+
+      res.json(contatosFiltrados.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+      dependencies.logDashboard(`❌ Erro ao buscar contatos: ${error.message}`);
+      res.status(500).json({ error: "Falha ao obter a lista de contatos." });
+    }
+  });
+
   router.get("/grupo/:id/participantes", async (req, res) => {
     const { id } = req.params;
     if (!dependencies.clientAtivo()) {

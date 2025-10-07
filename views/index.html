@@ -69,6 +69,9 @@
             <a class="nav-link" data-bs-toggle="tab" href="#grupos">Gerenciar Grupos</a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#contatos">Enviar para Contatos</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" data-bs-toggle="tab" href="#prompts">Prompts IA</a>
           </li>
         </ul>
@@ -351,6 +354,47 @@
           </div>
         </div>
 
+        <div class="tab-pane fade" id="contatos">
+          <div class="card card-dark">
+            <div class="text-center mb-3">
+              <button class="btn btn-primary" id="btn-carregar-contatos">
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.9"
+                    d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"
+                  />
+                </svg>
+                Carregar meus Contatos do WhatsApp
+              </button>
+            </div>
+            <div id="container-contatos" style="display: none">
+              <div class="mb-3">
+                <label style="color: white" for="mensagem-contatos" class="form-label">Mensagem para os selecionados:</label>
+                <textarea
+                  style="color: white"
+                  class="form-control"
+                  id="mensagem-contatos"
+                  rows="4"
+                  placeholder="Escreva sua mensagem aqui..."
+                ></textarea>
+                <div class="form-text" style="color: white">Use <code>[nome]</code> para personalizar a mensagem.</div>
+              </div>
+              <p style="color: white">Selecione os contatos:</p>
+              <div
+                id="lista-contatos-checkboxes"
+                style="max-height: 400px; overflow-y: auto; color: white"
+                class="p-2 border rounded"
+              ></div>
+              <div class="text-center mt-3">
+                <button class="btn btn-success" id="btn-enviar-para-contatos">Enviar para Selecionados</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="tab-pane fade" id="prompts">
           <div class="card card-dark">
             <h4 class="mb-3">✍️ Editando Prompts da IA</h4>
@@ -401,6 +445,9 @@
               <div class="mb-3">
                 <label for="mensagem-individual" class="form-label">Mensagem para os selecionados:</label>
                 <textarea class="form-control" id="mensagem-individual" rows="4" placeholder="Escreva sua mensagem aqui..."></textarea>
+                <div style="color: white" class="form-text">
+                  Use <code>[nome]</code> para personalizar a mensagem com o nome do contato.
+                </div>
               </div>
               <p>Selecione os participantes:</p>
               <div id="listaParticipantes"></div>

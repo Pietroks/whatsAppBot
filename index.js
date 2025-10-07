@@ -26,9 +26,6 @@ const PORT = process.env.PORT || 3001;
 const clientConfig = {
   puppeteer: {
     headless: true,
-    // Se a correção de remover o puppeteer do package.json funcionou,
-    // você pode remover a linha 'executablePath' abaixo.
-    // executablePath: executablePath(),
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -356,11 +353,24 @@ async function enviarMensagensIndividuais(userIds, mensagem) {
     const userId = userIds[i];
     if (i > 0) await delay(INTERVALO);
 
+    let mensagemPersonalizada = mensagem;
+    let nomeDisplay = userId.split("@")[0];
+
     try {
-      await client.sendMessage(userId, mensagem);
-      logDashboard(`📤 Mensagem enviada para ${userId.split("@")[0]}`);
+      const contact = await client.getContactById(userId);
+      const nomeContato = contact.pushname || contact.name;
+
+      if (nomeContato) {
+        nomeDisplay = nomeContato;
+        mensagemPersonalizada = mensagem.replace(/\[nome\]/gi, nomeContato);
+      } else {
+        mensagemPersonalizada = mensagem.replace(/ ?\[nome\],?/gi, "");
+      }
+
+      await client.sendMessage(userId, mensagemPersonalizada);
+      logDashboard(`📤 Mensagem personalizada enviada para "${nomeDisplay}"`);
     } catch (err) {
-      logDashboard(`❌ Falha ao enviar para ${userId.split("@")[0]}: ${err.message}`);
+      logDashboard(`❌ Falha ao enviar para ${nomeDisplay}: ${err.message}`);
     }
   }
   logDashboard("✅ Envio individual concluído.");

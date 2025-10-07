@@ -538,6 +538,88 @@ async function enviarMensagemParaSelecionados(modal) {
   checkboxes.forEach((cb) => (cb.checked = false));
 }
 
+async function carregarContatosParaEnvio() {
+  const btn = document.getElementById("btn-carregar-contatos");
+  const container = document.getElementById("container-contatos");
+  const listaDiv = document.getElementById("lista-contatos-checkboxes");
+
+  btn.disabled = true;
+  btn.innerHTML = "Carregando...";
+  showToast("Buscando seus contatos no WhatsApp...", "info");
+
+  try {
+    const res = await fetch("/api/contatos");
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error);
+    }
+    const contatos = await res.json();
+
+    listaDiv.innerHTML = "";
+    if (contatos.length === 0) {
+      listaDiv.innerHTML = '<p class="text-center">Nenhum contato encontrado na sua agenda.</p>';
+    } else {
+      contatos.forEach((c) => {
+        const numero = c.id.split("@")[0];
+        const div = document.createElement("div");
+        div.className = "form-check";
+        div.innerHTML = `
+          <input class="form-check-input" type="checkbox" value="${c.id}" id="contact-${c.id}">
+          <label class="form-check-label" for="contact-${c.id}">
+            <strong>${c.name}</strong> (${numero})
+          </label>
+        `;
+        listaDiv.appendChild(div);
+      });
+    }
+
+    container.style.display = "block";
+    btn.style.display = "none"; // Esconde o botão de carregar após o sucesso
+  } catch (error) {
+    showToast(`❌ Erro ao carregar contatos: ${error.message}`, "danger");
+    btn.disabled = false;
+    btn.innerHTML = "Tentar Novamente";
+  }
+}
+
+async function enviarParaContatosSelecionados() {
+  const mensagem = document.getElementById("mensagem-contatos").value;
+  const checkboxes = document.querySelectorAll('#lista-contatos-checkboxes input[type="checkbox"]:checked');
+  const userIds = Array.from(checkboxes).map((cb) => cb.value);
+
+  if (!mensagem || userIds.length === 0) {
+    return showToast("⚠️ É necessário escrever uma mensagem e selecionar pelo menos um contato.", "warning");
+  }
+
+  // AQUI REUTILIZAMOS A FUNÇÃO DE CONFIRMAÇÃO E ENVIO!
+  const confirmou = await showConfirm(`Deseja mesmo enviar a mensagem para ${userIds.length} contato(s)?`);
+  if (!confirmou) return;
+
+  showToast(`🚀 Enviando para ${userIds.length} contatos...`, "info");
+
+  // Reutiliza a mesma API de envio individual
+  fetch("/api/enviar-mensagem-individual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userIds, mensagem }),
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.ok) {
+        showToast("✅ Comando de envio recebido com sucesso!", "success");
+      } else {
+        showToast(`❌ Erro: ${data.error}`, "danger");
+      }
+    });
+
+  // Limpa a seleção
+  document.getElementById("mensagem-contatos").value = "";
+  checkboxes.forEach((cb) => (cb.checked = false));
+}
+
+document.getElementById("btn-carregar-contatos").addEventListener("click", carregarContatosParaEnvio);
+document.getElementById("btn-enviar-para-contatos").addEventListener("click", enviarParaContatosSelecionados);
+
 // FUNÇÃO PARA UPLOAD DE PDF
 async function uploadPDF(groupId, groupName, file) {
   if (!(await showConfirm(`Enviar o arquivo "${file.name}" para o grupo "${groupName}"? O PDF antigo será substituído.`))) {
