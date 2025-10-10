@@ -52,6 +52,7 @@ let logHistory = [];
 let state = {
   gruposValidos: [],
   clientEmDesconexao: false,
+  pararEnvioAtual: false,
   mensagensPreGeradas: new Map(),
   isQrCodeVisible: false,
 };
@@ -261,6 +262,15 @@ async function pararAgendamento() {
   }
 }
 
+function pararEnvioAtual() {
+  if (state.pararEnvioAtual) {
+    logDashboard("⚠️ Comando para parar já recebido, a aguardar o fim do ciclo atual.");
+    return;
+  }
+  logDashboard("🔴 Comando para parar o envio em massa recebido. O bot irá parar após a mensagem atual.");
+  state.pararEnvioAtual = true;
+}
+
 async function enviarMensagensEmLote() {
   try {
     const gruposSalvos = JSON.parse(await fs.readFile(gruposSyncPath, "utf-8"));
@@ -344,36 +354,113 @@ async function enviarMensagemParaGrupo(grupo, historicoCompleto) {
   }
 }
 
+function processarSpintax(texto) {
+  // O loop continua enquanto houver um {bloco|de|opções} no texto
+  while (texto.includes("{")) {
+    const spintaxRegex = /\{([^{}]+?)\}/; // Pega o primeiro bloco que encontrar
+    const match = texto.match(spintaxRegex);
+    if (!match) break; // Se não encontrar mais, para o loop
+
+    const opcoesString = match[1];
+    const opcoes = opcoesString.split("|");
+    // Escolhe uma opção aleatória e remove espaços extras
+    const escolhaAleatoria = opcoes[Math.floor(Math.random() * opcoes.length)].trim();
+
+    // Substitui o bloco {opções} pela escolha aleatória
+    texto = texto.replace(match[0], escolhaAleatoria);
+  }
+  return texto;
+}
+
 async function enviarMensagensIndividuais(userIds, mensagem) {
-  logDashboard(`📨 Iniciando envio individual para ${userIds.length} contatos.`);
+  state.pararEnvioAtual = false;
+  io.emit("envio_status", { inProgress: true });
+
+  logDashboard(`📨 A iniciar envio individual para ${userIds.length} contactos.`);
   const config = await carregarConfig();
-  const INTERVALO = config.delayEnvioMs || 5000;
+
+  const DELAY_MAX = config.delayEnvioMs || 60000;
+  const DELAY_MIN = DELAY_MAX * 0.5;
+
+  let sucessos = 0;
+  let falhas = 0;
+  let falhasConsecutivas = 0;
+  const LIMITE_FALHAS = 5;
 
   for (let i = 0; i < userIds.length; i++) {
-    const userId = userIds[i];
-    if (i > 0) await delay(INTERVALO);
+    if (state.pararEnvioAtual || falhasConsecutivas >= LIMITE_FALHAS) {
+      if (falhasConsecutivas >= LIMITE_FALHAS) logDashboard(`🚨 PARAGEM AUTOMÁTICA: Detetadas ${LIMITE_FALHAS} falhas consecutivas.`);
+      else logDashboard("🛑 Envio interrompido pelo utilizador.");
+      break;
+    }
 
-    let mensagemPersonalizada = mensagem;
+    const userId = userIds[i];
+    if (i > 0) {
+      const tempoDeEspera = Math.floor(Math.random() * (DELAY_MAX - DELAY_MIN + 1) + DELAY_MIN);
+      logDashboard(`...a aguardar ${Math.round(tempoDeEspera / 1000)} segundos...`);
+      await delay(tempoDeEspera);
+    }
+    if (state.pararEnvioAtual) break;
+
     let nomeDisplay = userId.split("@")[0];
 
     try {
-      const contact = await client.getContactById(userId);
-      const nomeContato = contact.pushname || contact.name;
+      const isRegistered = await client.isRegisteredUser(userId);
+      if (!isRegistered) {
+        logDashboard(`⚠️ (${i + 1}/${userIds.length}) Aviso: ${nomeDisplay} não tem WhatsApp. A pular.`);
+        falhas++;
+        continue;
+      }
 
-      if (nomeContato) {
-        nomeDisplay = nomeContato;
-        mensagemPersonalizada = mensagem.replace(/\[nome\]/gi, nomeContato);
+      let mensagemPersonalizada = mensagem;
+      const contact = await client.getContactById(userId);
+      const nomeCompleto = contact.pushname || contact.name;
+
+      if (nomeCompleto) {
+        const primeiroNome = nomeCompleto.split(" ")[0];
+        const nomeFormatado = primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase();
+        nomeDisplay = nomeFormatado;
+        mensagemPersonalizada = mensagem.replace(/\[nome\]/gi, nomeFormatado);
       } else {
         mensagemPersonalizada = mensagem.replace(/ ?\[nome\],?/gi, "");
       }
 
-      await client.sendMessage(userId, mensagemPersonalizada);
-      logDashboard(`📤 Mensagem personalizada enviada para "${nomeDisplay}"`);
+      // --- CORREÇÃO FINAL APLICADA AQUI ---
+      // Primeiro processamos o Spintax para obter o texto final
+      const mensagemFinal = processarSpintax(mensagemPersonalizada);
+
+      if (!mensagemFinal || mensagemFinal.trim() === "") {
+        logDashboard(`⚠️ (${i + 1}/${userIds.length}) Mensagem para "${nomeDisplay}" resultou em texto vazio. A pular.`);
+        falhas++;
+        continue;
+      }
+
+      // Agora, com o texto final pronto, simulamos o comportamento humano
+      const chat = await client.getChatById(userId);
+      await chat.sendStateTyping();
+      await delay(Math.random() * (2500 - 500) + 500); // Pausa aleatória curta
+
+      // Finalmente, enviamos a mensagem
+      await chat.sendMessage(mensagemFinal);
+      await chat.clearState();
+      // --- FIM DA CORREÇÃO ---
+
+      logDashboard(`📤 (${i + 1}/${userIds.length}) Mensagem enviada para "${nomeDisplay}"`);
+      sucessos++;
+      falhasConsecutivas = 0;
     } catch (err) {
-      logDashboard(`❌ Falha ao enviar para ${nomeDisplay}: ${err.message}`);
+      logDashboard(`❌ (${i + 1}/${userIds.length}) Falha ao enviar para ${nomeDisplay}: ${err.message}`);
+      falhas++;
+      falhasConsecutivas++;
+      if (err.message.includes("b") || err.message.includes("body")) {
+        logDashboard(" A pausar por 10 segundos extra devido a instabilidade...");
+        await delay(10000);
+      }
     }
   }
-  logDashboard("✅ Envio individual concluído.");
+  logDashboard(`✅ Envio concluído! Sucessos: ${sucessos}, Falhas: ${falhas}.`);
+  state.pararEnvioAtual = false;
+  io.emit("envio_status", { inProgress: false });
 }
 
 // ... Funções de utilidade (salvarJSONSeDiferente, salvarMensagemNoHistorico, etc.) ...
@@ -430,10 +517,8 @@ async function carregarConfig() {
   try {
     const data = await fs.readFile(configPath, "utf-8");
     const userConfig = JSON.parse(data);
-    // Mescla a configuração do usuário com a padrão, garantindo que todos os campos existam
     return { ...defaultConfig, ...userConfig };
   } catch {
-    // Se o arquivo não existir ou for inválido, retorna a configuração padrão completa
     return defaultConfig;
   }
 }
@@ -450,6 +535,7 @@ const dependencies = {
   sincronizarGrupos,
   iniciarAgendamento,
   pararAgendamento,
+  pararEnvioAtual,
   initializeClient,
   destroyClient,
   salvarJSONSeDiferente,

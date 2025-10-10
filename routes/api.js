@@ -237,6 +237,15 @@ function createApiRouter(dependencies) {
     }
   });
 
+  router.post("/parar-envio-individual", (req, res) => {
+    try {
+      dependencies.pararEnvioAtual();
+      res.json({ ok: true, message: "Comando de paragem recebido." });
+    } catch (err) {
+      res.status(500).json({ error: "Falha ao processar o comando." });
+    }
+  });
+
   router.get("/grupos-sincronizados", async (req, res) => {
     try {
       const data = await fs.readFile(gruposSyncPath, "utf-8");

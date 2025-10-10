@@ -2,6 +2,7 @@ const API_BOT = window.location.origin;
 const socket = io();
 let syncGroupCount = 0;
 
+document.getElementById("btn-parar-envio").style.display = "none";
 const modalQrElement = document.getElementById("modalQr");
 const modalQr = new bootstrap.Modal(modalQrElement);
 const qrScanAbortedListener = () => {
@@ -11,6 +12,7 @@ const qrScanAbortedListener = () => {
 const modalTeste = new bootstrap.Modal(document.getElementById("modalTeste"));
 const modalConfirm = new bootstrap.Modal(document.getElementById("modalConfirm"));
 const botaoAcao = document.getElementById("botao-acao");
+const btnPararEnvio = document.getElementById("btn-parar-envio");
 
 async function showToast(message, type = "info") {
   const toastContainer = document.querySelector(".toast-container");
@@ -47,10 +49,11 @@ async function showToast(message, type = "info") {
   });
 }
 
-function showConfirm(question) {
+function showConfirm(question, title = "⚠️ Confirmação") {
   const modalElement = document.getElementById("modalConfirm");
   const confirmModal = bootstrap.Modal.getOrCreateInstance(modalElement);
 
+  document.getElementById("confirmTitle").textContent = title;
   document.getElementById("confirmQuestion").textContent = question;
 
   return new Promise((resolve) => {
@@ -58,15 +61,15 @@ function showConfirm(question) {
     const cancelBtn = document.getElementById("confirmCancelBtn");
 
     const onOk = () => {
-      resolve(true);
-      confirmModal.hide();
       cleanup();
+      confirmModal.hide();
+      resolve(true);
     };
 
     const onCancel = () => {
-      resolve(false);
-      confirmModal.hide();
       cleanup();
+      confirmModal.hide();
+      resolve(false);
     };
 
     const cleanup = () => {
@@ -180,6 +183,14 @@ function abrirQrCode() {
 
 function acaoBot() {}
 
+async function pararEnvioDashboard() {
+  if (!(await showConfirm("Tem a certeza que deseja interromper o envio em massa atual?"))) return;
+  fetch("/api/parar-envio-individual", { method: "POST" });
+  showToast("🔴 Comando para parar o envio foi enviado!", "warning");
+  btnPararEnvio.disabled = true;
+  btnPararEnvio.querySelector("span").textContent = "Parando envio...";
+}
+
 socket.on("log_history", (history) => {
   const logs = document.getElementById("logs");
   logs.innerHTML = "";
@@ -205,6 +216,16 @@ socket.on("status", (status) => {
   if (status === "conectado") {
     modalQrElement.removeEventListener("hidden.bs.modal", qrScanAbortedListener);
     modalQr.hide();
+  }
+});
+
+socket.on("envio_status", (status) => {
+  if (status.inProgress) {
+    btnPararEnvio.style.display = "flex";
+    btnPararEnvio.disabled = false;
+    btnPararEnvio.querySelector("span").textContent = "Parar Envio Atual";
+  } else {
+    btnPararEnvio.style.display = "none";
   }
 });
 
